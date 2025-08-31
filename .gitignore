@@ -1,1 +1,14 @@
 /venv
+/src/__pycache__
+/src/core/__pycache__
+/src/models/__pycache__
+/src/services/__pycache__
+/src/utils/__pycache__
+.env
+.env
+.env
+.env
+ui/.env 2
+.env
+.env
+test-470213-754897d2ce82.json

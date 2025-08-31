@@ -1,12 +1,13 @@
 import { ChakraProvider, Box } from '@chakra-ui/react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { theme } from './theme'
-import { Layout } from './components/Layout'
+import Layout from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { PRCreation } from './pages/PRCreation'
 import { PRReview } from './pages/PRReview'
 import { Tracking } from './pages/Tracking'
 import { Settings } from './pages/Settings'
+import { ConfigTestPage } from './pages/ConfigTestPage'
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
               <Route path="/review-pr" element={<PRReview />} />
               <Route path="/tracking" element={<Tracking />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/config-test" element={<ConfigTestPage />} />
             </Routes>
           </Layout>
         </Box>

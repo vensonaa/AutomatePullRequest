@@ -13,11 +13,9 @@ from rich.text import Text
 
 from src.core.automation import GitHubPRAutomation
 from src.utils.config import load_config
-from src.utils.logger import setup_logger
 
 app = typer.Typer(help="GitHub PR Automation with Groq AI")
 console = Console()
-logger = setup_logger()
 
 @app.command()
 def create_pr(
@@ -72,7 +70,6 @@ def create_pr(
                 title="Error",
                 border_style="red"
             ))
-            logger.error(f"Error creating PR: {e}")
 
 @app.command()
 def review_prs(
@@ -126,7 +123,6 @@ def review_prs(
                 title="Error",
                 border_style="red"
             ))
-            logger.error(f"Error reviewing PRs: {e}")
 
 @app.command()
 def track_approvals(
@@ -171,7 +167,6 @@ def track_approvals(
                 title="Error",
                 border_style="red"
             ))
-            logger.error(f"Error tracking approvals: {e}")
 
 @app.command()
 def auto_workflow(
@@ -204,7 +199,6 @@ def auto_workflow(
             title="Error",
             border_style="red"
         ))
-        logger.error(f"Error in auto workflow: {e}")
 
 @app.command()
 def update_sheet(
@@ -248,7 +242,6 @@ def update_sheet(
                 title="Error",
                 border_style="red"
             ))
-            logger.error(f"Error updating sheet: {e}")
 
 @app.command()
 def status():
@@ -274,6 +267,38 @@ def status():
     except Exception as e:
         console.print(Panel(
             f"[red]❌ Error getting status: {str(e)}[/red]",
+            title="Error",
+            border_style="red"
+        ))
+
+@app.command()
+def setup():
+    """Setup environment configuration"""
+    try:
+        from src.utils.config import save_env_template, create_sample_env
+        
+        # Create .env template
+        if save_env_template(".env"):
+            console.print(Panel(
+                "[green]✅ .env template created successfully![/green]\n\n"
+                "Please edit the .env file with your actual configuration values:\n"
+                "- GITHUB_TOKEN: Your GitHub personal access token\n"
+                "- GROQ_API_KEY: Your Groq API key\n"
+                "- GOOGLE_SHEETS_CREDENTIALS_FILE: Path to your Google Sheets credentials\n"
+                "- GOOGLE_SHEETS_SPREADSHEET_ID: Your Google Sheets ID",
+                title="Setup Complete",
+                border_style="green"
+            ))
+        else:
+            console.print(Panel(
+                "[red]❌ Failed to create .env template[/red]",
+                title="Error",
+                border_style="red"
+            ))
+            
+    except Exception as e:
+        console.print(Panel(
+            f"[red]❌ Error during setup: {str(e)}[/red]",
             title="Error",
             border_style="red"
         ))

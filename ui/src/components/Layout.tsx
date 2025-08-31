@@ -9,8 +9,6 @@ import {
   Drawer,
   DrawerContent,
   useDisclosure,
-  BoxProps,
-  FlexProps,
   CloseButton,
   Button,
   Avatar,
@@ -31,7 +29,7 @@ import {
   FiChevronDown,
   FiGitBranch,
   FiEye,
-  FiBarChart3,
+  FiBarChart,
   FiZap,
 } from 'react-icons/fi'
 import { Link, useLocation } from 'react-router-dom'
@@ -46,7 +44,7 @@ const LinkItems: Array<LinkItemProps> = [
   { name: 'Dashboard', icon: FiHome, path: '/' },
   { name: 'Create PR', icon: FiGitBranch, path: '/create-pr' },
   { name: 'Review PR', icon: FiEye, path: '/review-pr' },
-  { name: 'Tracking', icon: FiBarChart3, path: '/tracking' },
+  { name: 'Tracking', icon: FiBarChart, path: '/tracking' },
   { name: 'Automation', icon: FiZap, path: '/automation' },
   { name: 'Settings', icon: FiSettings, path: '/settings' },
 ]
@@ -80,7 +78,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
-interface SidebarProps extends BoxProps {
+interface SidebarProps {
   onClose: () => void
 }
 
@@ -112,7 +110,7 @@ const SidebarContent = ({ onClose, ...rest }: SidebarProps) => {
   )
 }
 
-interface NavItemProps extends FlexProps {
+interface NavItemProps {
   icon: any
   children: React.ReactNode
   path: string
@@ -149,7 +147,7 @@ const NavItem = ({ icon, children, path, isActive, ...rest }: NavItemProps) => {
   )
 }
 
-interface MobileProps extends FlexProps {
+interface MobileProps {
   onOpen: () => void
 }
 

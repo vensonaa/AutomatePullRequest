@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GroqConfig:
     api_key: str
-    model: str = "groq/llama3-8b-8192"
+    model: str = "llama-3.1-8b-instant"
     max_tokens: int = 2048
     temperature: float = 0.7
 

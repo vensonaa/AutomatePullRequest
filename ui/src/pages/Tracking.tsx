@@ -33,7 +33,7 @@ import {
   InputLeftElement,
 } from '@chakra-ui/react'
 import {
-  FiBarChart3,
+  FiBarChart,
   FiRefreshCw,
   FiDownload,
   FiFilter,
@@ -59,52 +59,16 @@ interface TrackingData {
   branch: string
 }
 
-const mockTrackingData: TrackingData[] = [
-  {
-    prNumber: 123,
-    title: 'Add user authentication feature',
-    status: 'open',
-    createdDate: '2024-01-15T10:30:00Z',
-    reviewStatus: 'pending',
-    approvals: '1/2',
-    commentsCount: 5,
-    lastUpdated: '2024-01-15T14:20:00Z',
-    author: 'john.doe',
-    branch: 'feature/user-auth',
-  },
-  {
-    prNumber: 124,
-    title: 'Fix navigation bug in mobile view',
-    status: 'open',
-    createdDate: '2024-01-15T09:15:00Z',
-    reviewStatus: 'approved',
-    approvals: '2/2 ✅',
-    commentsCount: 3,
-    lastUpdated: '2024-01-15T11:45:00Z',
-    author: 'jane.smith',
-    branch: 'bugfix/mobile-nav',
-  },
-  {
-    prNumber: 125,
-    title: 'Update API documentation',
-    status: 'closed',
-    createdDate: '2024-01-14T16:20:00Z',
-    reviewStatus: 'merged',
-    approvals: '2/2 ✅',
-    commentsCount: 1,
-    lastUpdated: '2024-01-15T08:30:00Z',
-    author: 'mike.wilson',
-    branch: 'docs/api-update',
-  },
-]
+// TODO: Replace with real API calls
+const mockTrackingData: TrackingData[] = []
 
 const mockStats = {
-  totalPRs: 156,
-  openPRs: 23,
-  approvedPRs: 89,
-  pendingReviews: 12,
-  avgReviewTime: '2.3h',
-  approvalRate: 78.5,
+  totalPRs: 0,
+  openPRs: 0,
+  approvedPRs: 0,
+  pendingReviews: 0,
+  avgReviewTime: '0h',
+  approvalRate: 0,
 }
 
 export function Tracking() {
@@ -219,7 +183,7 @@ export function Tracking() {
                     12.5%
                   </StatHelpText>
                 </Box>
-                <Icon as={FiBarChart3} w={8} h={8} color="brand.500" />
+                <Icon as={FiBarChart} w={8} h={8} color="brand.500" />
               </HStack>
             </Stat>
           </CardBody>

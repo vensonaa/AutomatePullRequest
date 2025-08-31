@@ -42,7 +42,9 @@ import {
   FiRefreshCw,
   FiCheckCircle,
 } from 'react-icons/fi'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import apiService from '../services/apiService'
+import { config } from '../utils/config'
 
 interface PRFormData {
   branch: string
@@ -55,34 +57,12 @@ interface PRFormData {
   customPrompt: string
 }
 
-const mockBranches = [
-  'feature/user-auth',
-  'feature/payment-integration',
-  'bugfix/navigation-issue',
-  'hotfix/security-patch',
-  'feature/dashboard-redesign',
-]
-
-const mockLabels = [
-  'enhancement',
-  'bug-fix',
-  'documentation',
-  'security',
-  'performance',
-  'ui/ux',
-  'backend',
-  'frontend',
-]
-
-const mockReviewers = [
-  'john.doe',
-  'jane.smith',
-  'mike.wilson',
-  'sarah.jones',
-  'alex.brown',
-]
-
 export function PRCreation() {
+  // Real data from GitHub API
+  const [branches, setBranches] = useState<any[]>([])
+  const [labels, setLabels] = useState<any[]>([])
+  const [reviewers, setReviewers] = useState<any[]>([])
+  const [isLoadingData, setIsLoadingData] = useState(false)
   const [formData, setFormData] = useState<PRFormData>({
     branch: '',
     title: '',
@@ -96,6 +76,47 @@ export function PRCreation() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [preview, setPreview] = useState<any>(null)
+
+  // Load GitHub data on component mount
+  useEffect(() => {
+    const loadGitHubData = async () => {
+      setIsLoadingData(true)
+      try {
+        const [branchesResponse, labelsResponse, collaboratorsResponse] = await Promise.all([
+          apiService.getBranches(),
+          apiService.getLabels(),
+          apiService.getCollaborators()
+        ])
+        
+        setBranches(branchesResponse.branches || [])
+        setLabels(labelsResponse.labels || [])
+        setReviewers(collaboratorsResponse.collaborators || [])
+        
+        // Set default base branch from environment or first available branch
+        const branchesData = branchesResponse.branches || []
+        if (branchesData.length > 0) {
+          const defaultBranch = branchesData.find(branch => branch.name === config.github.baseBranch) || branchesData[0]
+          setFormData(prev => ({
+            ...prev,
+            baseBranch: defaultBranch.name
+          }))
+        }
+      } catch (error) {
+        console.error('Failed to load GitHub data:', error)
+        toast({
+          title: 'Failed to load GitHub data',
+          description: 'Please check your backend server is running and GitHub configuration is correct',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+      } finally {
+        setIsLoadingData(false)
+      }
+    }
+
+    loadGitHubData()
+  }, [])
 
   const toast = useToast()
   const cardBg = useColorModeValue('white', 'gray.700')
@@ -132,10 +153,10 @@ export function PRCreation() {
       await new Promise(resolve => setTimeout(resolve, 2000))
       
       const aiGenerated = {
-        title: `Add ${formData.branch.split('/')[1] || 'new feature'}`,
-        description: `This PR implements ${formData.branch.split('/')[1] || 'new functionality'}.\n\n## Changes\n- Added new feature\n- Updated documentation\n- Fixed related issues\n\n## Testing\n- [x] Unit tests passed\n- [x] Integration tests passed\n- [x] Manual testing completed`,
-        labels: ['enhancement', 'feature'],
-        reviewers: ['john.doe', 'jane.smith'],
+        title: '',
+        description: '',
+        labels: [],
+        reviewers: [],
       }
       
       setFormData(prev => ({
@@ -167,36 +188,106 @@ export function PRCreation() {
   }
 
   const createPR = async () => {
-    setIsLoading(true)
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
+    // Validate required fields
+    if (!formData.branch || !formData.title) {
       toast({
-        title: 'PR Created Successfully',
-        description: `PR #123 has been created and is ready for review`,
-        status: 'success',
-        duration: 5000,
+        title: 'Missing Required Fields',
+        description: 'Please fill in the source branch and PR title',
+        status: 'error',
+        duration: 3000,
         isClosable: true,
       })
+      return
+    }
+
+    if (formData.branch === formData.baseBranch) {
+      toast({
+        title: 'Invalid Branch Selection',
+        description: 'Source branch and base branch cannot be the same',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    // Validate that branches exist in the loaded data
+    const sourceBranchExists = branches.some(branch => branch.name === formData.branch)
+    const baseBranchExists = branches.some(branch => branch.name === formData.baseBranch)
+
+    if (!sourceBranchExists) {
+      toast({
+        title: 'Invalid Source Branch',
+        description: `Source branch "${formData.branch}" not found. Please refresh the data.`,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    if (!baseBranchExists) {
+      toast({
+        title: 'Invalid Base Branch',
+        description: `Base branch "${formData.baseBranch}" not found. Please refresh the data.`,
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // Create the pull request using backend API
+      const prData = await apiService.createPullRequest({
+        title: formData.title,
+        head: formData.branch,
+        base: formData.baseBranch,
+        body: formData.description,
+        labels: formData.labels,
+        reviewers: formData.reviewers
+      })
+      
+      // Show different messages based on auto-approval status
+      if (prData.auto_approved) {
+        toast({
+          title: 'PR Created and Auto-Approved! 🚀',
+          description: `PR #${prData.pr_number} has been created, auto-approved, and merged successfully!`,
+          status: 'success',
+          duration: 8000,
+          isClosable: true,
+        })
+      } else {
+        toast({
+          title: 'PR Created Successfully',
+          description: `PR #${prData.pr_number} has been created and is ready for review`,
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        })
+      }
       
       // Reset form
       setFormData({
         branch: '',
         title: '',
         description: '',
-        baseBranch: 'main',
+        baseBranch: config.github.baseBranch || 'main',
         labels: [],
         reviewers: [],
         autoMerge: false,
         customPrompt: '',
       })
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Failed to create PR:', error)
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to create PR'
+      
       toast({
         title: 'Creation Failed',
-        description: 'Failed to create PR. Please try again.',
+        description: errorMessage,
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       })
     } finally {
@@ -206,6 +297,18 @@ export function PRCreation() {
 
   return (
     <Box>
+      {isLoadingData && (
+        <Alert status="info" mb={4}>
+          <AlertIcon />
+          <Box>
+            <AlertTitle>Loading GitHub Data</AlertTitle>
+            <AlertDescription>
+              Fetching branches, labels, and reviewers from your repository...
+            </AlertDescription>
+          </Box>
+        </Alert>
+      )}
+
       <Flex justify="space-between" align="center" mb={6}>
         <Box>
           <Heading size="lg" mb={2}>
@@ -215,16 +318,116 @@ export function PRCreation() {
             Create a new PR with AI-powered assistance
           </Text>
         </Box>
-        <Button
-          leftIcon={<FiZap />}
-          onClick={generateWithAI}
-          isLoading={isGenerating}
-          loadingText="Generating..."
-          variant="gradient"
-          size="lg"
-        >
-          Generate with AI
-        </Button>
+        <HStack spacing={3}>
+          <Button
+            leftIcon={<FiCheckCircle />}
+            onClick={async () => {
+              try {
+                const isConnected = await githubService.testConnection()
+                if (isConnected) {
+                  toast({
+                    title: 'GitHub Connection Test',
+                    description: 'Successfully connected to GitHub API',
+                    status: 'success',
+                    duration: 3000,
+                    isClosable: true,
+                  })
+                } else {
+                  toast({
+                    title: 'GitHub Connection Test',
+                    description: 'Failed to connect to GitHub API. Check your token and repository.',
+                    status: 'error',
+                    duration: 5000,
+                    isClosable: true,
+                  })
+                }
+              } catch (error) {
+                toast({
+                  title: 'GitHub Connection Test',
+                  description: 'Error testing connection: ' + (error as any).message,
+                  status: 'error',
+                  duration: 5000,
+                  isClosable: true,
+                })
+              }
+            }}
+            variant="outline"
+            size="lg"
+          >
+            Test Connection
+          </Button>
+          <Button
+            leftIcon={<FiRefreshCw />}
+            onClick={async () => {
+              setIsLoadingData(true)
+              try {
+                const [branchesResponse, labelsResponse, collaboratorsResponse] = await Promise.all([
+                  apiService.getBranches(),
+                  apiService.getLabels(),
+                  apiService.getCollaborators()
+                ])
+                
+                const branchesData = branchesResponse.branches || []
+                const labelsData = labelsResponse.labels || []
+                const reviewersData = collaboratorsResponse.collaborators || []
+                
+                setBranches(branchesData)
+                setLabels(labelsData)
+                setReviewers(reviewersData)
+                
+                // Update base branch if current one is not in the new list
+                if (branchesData.length > 0) {
+                  const currentBaseBranch = formData.baseBranch
+                  const branchExists = branchesData.some(branch => branch.name === currentBaseBranch)
+                  
+                  if (!branchExists) {
+                    const defaultBranch = branchesData.find(branch => branch.name === config.github.baseBranch) || branchesData[0]
+                    setFormData(prev => ({
+                      ...prev,
+                      baseBranch: defaultBranch.name
+                    }))
+                  }
+                }
+                
+                toast({
+                  title: 'Data Refreshed',
+                  description: 'GitHub data has been updated successfully',
+                  status: 'success',
+                  duration: 3000,
+                  isClosable: true,
+                })
+              } catch (error) {
+                console.error('Failed to refresh GitHub data:', error)
+                toast({
+                  title: 'Refresh Failed',
+                  description: 'Failed to refresh GitHub data. Please check your backend server is running.',
+                  status: 'error',
+                  duration: 5000,
+                  isClosable: true,
+                })
+              } finally {
+                setIsLoadingData(false)
+              }
+            }}
+            isLoading={isLoadingData}
+            loadingText="Refreshing..."
+            variant="outline"
+            size="lg"
+          >
+            Refresh Data
+          </Button>
+          <Button
+            leftIcon={<FiZap />}
+            onClick={generateWithAI}
+            isLoading={isGenerating}
+            loadingText="Generating..."
+            variant="gradient"
+            size="lg"
+            isDisabled={isLoadingData}
+          >
+            Generate with AI
+          </Button>
+        </HStack>
       </Flex>
 
       <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={6}>
@@ -240,16 +443,22 @@ export function PRCreation() {
                 <FormControl isRequired>
                   <FormLabel>Source Branch</FormLabel>
                   <Select
-                    placeholder="Select branch"
+                    placeholder={isLoadingData ? "Loading branches..." : "Select branch"}
                     value={formData.branch}
                     onChange={(e) => handleInputChange('branch', e.target.value)}
+                    isDisabled={isLoadingData}
                   >
-                    {mockBranches.map(branch => (
-                      <option key={branch} value={branch}>
-                        {branch}
+                    {branches.map(branch => (
+                      <option key={branch.name} value={branch.name}>
+                        {branch.name}
                       </option>
                     ))}
                   </Select>
+                  {branches.length === 0 && !isLoadingData && (
+                    <Text fontSize="sm" color="red.500" mt={1}>
+                      No branches found. Please check your GitHub configuration.
+                    </Text>
+                  )}
                 </FormControl>
 
                 <FormControl>
@@ -257,11 +466,19 @@ export function PRCreation() {
                   <Select
                     value={formData.baseBranch}
                     onChange={(e) => handleInputChange('baseBranch', e.target.value)}
+                    isDisabled={isLoadingData}
                   >
-                    <option value="main">main</option>
-                    <option value="develop">develop</option>
-                    <option value="staging">staging</option>
+                    {branches.map(branch => (
+                      <option key={branch.name} value={branch.name}>
+                        {branch.name}
+                      </option>
+                    ))}
                   </Select>
+                  {branches.length === 0 && !isLoadingData && (
+                    <Text fontSize="sm" color="red.500" mt={1}>
+                      No branches found. Please check your GitHub configuration.
+                    </Text>
+                  )}
                 </FormControl>
 
                 {/* Title */}
@@ -312,19 +529,22 @@ export function PRCreation() {
                       ))}
                     </HStack>
                     <Select
-                      placeholder="Add label"
+                      placeholder={isLoadingData ? "Loading labels..." : "Add label"}
                       onChange={(e) => {
                         if (e.target.value) {
                           addLabel(e.target.value)
                           e.target.value = ''
                         }
                       }}
+                      isDisabled={isLoadingData}
                     >
-                      {mockLabels.filter(label => !formData.labels.includes(label)).map(label => (
-                        <option key={label} value={label}>
-                          {label}
-                        </option>
-                      ))}
+                      {labels
+                        .filter(label => !formData.labels.includes(label.name))
+                        .map(label => (
+                          <option key={label.name} value={label.name}>
+                            {label.name}
+                          </option>
+                        ))}
                     </Select>
                   </VStack>
                 </FormControl>
@@ -342,20 +562,36 @@ export function PRCreation() {
                       ))}
                     </HStack>
                     <Select
-                      placeholder="Add reviewer"
+                      placeholder={isLoadingData ? "Loading reviewers..." : "Add reviewer"}
                       onChange={(e) => {
                         if (e.target.value) {
                           addReviewer(e.target.value)
                           e.target.value = ''
                         }
                       }}
+                      isDisabled={isLoadingData}
                     >
-                      {mockReviewers.filter(reviewer => !formData.reviewers.includes(reviewer)).map(reviewer => (
-                        <option key={reviewer} value={reviewer}>
-                          {reviewer}
-                        </option>
-                      ))}
+                      {reviewers
+                        .filter(reviewer => !formData.reviewers.includes(reviewer.login))
+                        .map(reviewer => (
+                          <option key={reviewer.login} value={reviewer.login}>
+                            {reviewer.login}
+                          </option>
+                        ))}
                     </Select>
+                    
+                    {/* Auto-approve notice */}
+                    {formData.reviewers.length === 0 && (
+                      <Alert status="info" variant="subtle">
+                        <AlertIcon />
+                        <Box>
+                          <AlertTitle>Auto-Approve Enabled</AlertTitle>
+                          <AlertDescription>
+                            No reviewers selected. This PR will be automatically approved and merged upon creation.
+                          </AlertDescription>
+                        </Box>
+                      </Alert>
+                    )}
                   </VStack>
                 </FormControl>
 

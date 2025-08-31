@@ -51,62 +51,21 @@ import {
 } from 'react-icons/fi'
 import { useState, useEffect } from 'react'
 
-// Mock data - replace with real API calls
+// TODO: Replace with real API calls
 const mockStats = {
-  totalPRs: 156,
-  openPRs: 23,
-  approvedPRs: 89,
-  pendingReviews: 12,
-  avgReviewTime: '2.3h',
-  approvalRate: 78.5,
+  totalPRs: 0,
+  openPRs: 0,
+  approvedPRs: 0,
+  pendingReviews: 0,
+  avgReviewTime: '0h',
+  approvalRate: 0,
 }
 
-const mockChartData = [
-  { name: 'Mon', PRs: 4, Reviews: 3, Approvals: 2 },
-  { name: 'Tue', PRs: 6, Reviews: 5, Approvals: 4 },
-  { name: 'Wed', PRs: 8, Reviews: 7, Approvals: 6 },
-  { name: 'Thu', PRs: 5, Reviews: 4, Approvals: 3 },
-  { name: 'Fri', PRs: 7, Reviews: 6, Approvals: 5 },
-  { name: 'Sat', PRs: 3, Reviews: 2, Approvals: 1 },
-  { name: 'Sun', PRs: 2, Reviews: 1, Approvals: 1 },
-]
+const mockChartData: any[] = []
 
-const mockRecentPRs = [
-  {
-    id: 1,
-    title: 'Add user authentication feature',
-    author: 'john.doe',
-    status: 'open',
-    reviews: 2,
-    required: 2,
-    createdAt: '2 hours ago',
-  },
-  {
-    id: 2,
-    title: 'Fix navigation bug in mobile view',
-    author: 'jane.smith',
-    status: 'approved',
-    reviews: 3,
-    required: 2,
-    createdAt: '4 hours ago',
-  },
-  {
-    id: 3,
-    title: 'Update API documentation',
-    author: 'mike.wilson',
-    status: 'pending',
-    reviews: 1,
-    required: 2,
-    createdAt: '6 hours ago',
-  },
-]
+const mockRecentPRs: any[] = []
 
-const mockPieData = [
-  { name: 'Open', value: 23, color: '#3182CE' },
-  { name: 'Approved', value: 89, color: '#38A169' },
-  { name: 'Pending', value: 12, color: '#D69E2E' },
-  { name: 'Closed', value: 32, color: '#E53E3E' },
-]
+const mockPieData: any[] = []
 
 export function Dashboard() {
   const [isLoading, setIsLoading] = useState(false)

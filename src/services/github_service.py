@@ -34,7 +34,30 @@ class GitHubService:
             "Accept": "application/vnd.github.v3+json",
             "User-Agent": "GitHub-PR-Automation/1.0"
         }
-        self.owner, self.repo = config.repository.split("/")
+        # Handle repository format (supports both "owner/repo" and "https://github.com/owner/repo")
+        if config.repository:
+            if config.repository.startswith("https://github.com/"):
+                # Extract owner/repo from full URL
+                repo_part = config.repository.replace("https://github.com/", "")
+                if "/" in repo_part:
+                    self.owner, self.repo = repo_part.split("/", 1)
+                else:
+                    self.owner = "owner"
+                    self.repo = "repository_name"
+            elif "/" in config.repository:
+                # Direct owner/repo format
+                parts = config.repository.split("/")
+                if len(parts) == 2:
+                    self.owner, self.repo = parts
+                else:
+                    self.owner = "owner"
+                    self.repo = "repository_name"
+            else:
+                self.owner = "owner"
+                self.repo = "repository_name"
+        else:
+            self.owner = "owner"
+            self.repo = "repository_name"
     
     async def _make_request(
         self, 
@@ -143,12 +166,28 @@ class GitHubService:
                 await self._make_request("POST", f"pulls/{pr_data['number']}/requested_reviewers", {
                     "reviewers": reviewers
                 })
+            else:
+                # No reviewers selected - auto-approve and merge
+                logger.info(f"No reviewers selected for PR #{pr_data['number']}, auto-approving and merging")
+                success, message = await self.auto_approve_pr(pr_data['number'])
+                if not success:
+                    logger.warning(f"Auto-approve failed for PR #{pr_data['number']}: {message}")
             
-            # Enable auto-merge if requested
-            if auto_merge:
+            # Enable auto-merge if requested (only if reviewers are selected)
+            if auto_merge and reviewers:
                 await self._make_request("PUT", f"pulls/{pr_data['number']}/merge", {
                     "merge_method": "squash"
                 })
+            
+            try:
+                created_at = datetime.fromisoformat(pr_data['created_at'].replace('Z', '+00:00'))
+            except:
+                created_at = datetime.now()
+            
+            try:
+                updated_at = datetime.fromisoformat(pr_data['updated_at'].replace('Z', '+00:00'))
+            except:
+                updated_at = datetime.now()
             
             return PRData(
                 number=pr_data['number'],
@@ -158,8 +197,8 @@ class GitHubService:
                 html_url=pr_data['html_url'],
                 head_branch=pr_data['head']['ref'],
                 base_branch=pr_data['base']['ref'],
-                created_at=datetime.fromisoformat(pr_data['created_at'].replace('Z', '+00:00')),
-                updated_at=datetime.fromisoformat(pr_data['updated_at'].replace('Z', '+00:00')),
+                created_at=created_at,
+                updated_at=updated_at,
                 author=pr_data['user']['login'],
                 labels=[label['name'] for label in pr_data.get('labels', [])],
                 reviewers=[reviewer['login'] for reviewer in pr_data.get('requested_reviewers', [])]
@@ -204,6 +243,17 @@ class GitHubService:
             
             prs = []
             for pr_data in prs_data:
+                try:
+                    # Handle datetime parsing safely
+                    created_at = datetime.fromisoformat(pr_data['created_at'].replace('Z', '+00:00'))
+                except:
+                    created_at = datetime.now()
+                
+                try:
+                    updated_at = datetime.fromisoformat(pr_data['updated_at'].replace('Z', '+00:00'))
+                except:
+                    updated_at = datetime.now()
+                
                 prs.append(PRData(
                     number=pr_data['number'],
                     title=pr_data['title'],
@@ -212,8 +262,8 @@ class GitHubService:
                     html_url=pr_data['html_url'],
                     head_branch=pr_data['head']['ref'],
                     base_branch=pr_data['base']['ref'],
-                    created_at=datetime.fromisoformat(pr_data['created_at'].replace('Z', '+00:00')),
-                    updated_at=datetime.fromisoformat(pr_data['updated_at'].replace('Z', '+00:00')),
+                    created_at=created_at,
+                    updated_at=updated_at,
                     author=pr_data['user']['login'],
                     labels=[label['name'] for label in pr_data.get('labels', [])],
                     reviewers=[reviewer['login'] for reviewer in pr_data.get('requested_reviewers', [])]
@@ -234,6 +284,17 @@ class GitHubService:
             
             prs = []
             for pr_data in prs_data:
+                try:
+                    # Handle datetime parsing safely
+                    created_at = datetime.fromisoformat(pr_data['created_at'].replace('Z', '+00:00'))
+                except:
+                    created_at = datetime.now()
+                
+                try:
+                    updated_at = datetime.fromisoformat(pr_data['updated_at'].replace('Z', '+00:00'))
+                except:
+                    updated_at = datetime.now()
+                
                 prs.append(PRData(
                     number=pr_data['number'],
                     title=pr_data['title'],
@@ -242,8 +303,8 @@ class GitHubService:
                     html_url=pr_data['html_url'],
                     head_branch=pr_data['head']['ref'],
                     base_branch=pr_data['base']['ref'],
-                    created_at=datetime.fromisoformat(pr_data['created_at'].replace('Z', '+00:00')),
-                    updated_at=datetime.fromisoformat(pr_data['updated_at'].replace('Z', '+00:00')),
+                    created_at=created_at,
+                    updated_at=updated_at,
                     author=pr_data['user']['login'],
                     labels=[label['name'] for label in pr_data.get('labels', [])],
                     reviewers=[reviewer['login'] for reviewer in pr_data.get('requested_reviewers', [])]
@@ -380,3 +441,171 @@ class GitHubService:
         except Exception as e:
             logger.error(f"Error updating PR status: {e}")
             return False
+
+    async def get_branches(self) -> List[Dict[str, Any]]:
+        """Get all branches from the repository"""
+        try:
+            branches_data = await self._make_request("GET", "branches")
+            if branches_data:
+                return [
+                    {
+                        "name": branch["name"],
+                        "sha": branch["commit"]["sha"],
+                        "protected": branch.get("protected", False)
+                    }
+                    for branch in branches_data
+                ]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting branches: {e}")
+            return []
+
+    async def get_labels(self) -> List[Dict[str, Any]]:
+        """Get all labels from the repository"""
+        try:
+            labels_data = await self._make_request("GET", "labels")
+            if labels_data:
+                return [
+                    {
+                        "name": label["name"],
+                        "color": label["color"],
+                        "description": label.get("description", "")
+                    }
+                    for label in labels_data
+                ]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting labels: {e}")
+            return []
+
+    async def get_collaborators(self) -> List[Dict[str, Any]]:
+        """Get all collaborators from the repository"""
+        try:
+            collaborators_data = await self._make_request("GET", "collaborators")
+            if collaborators_data:
+                return [
+                    {
+                        "login": user["login"],
+                        "id": user["id"],
+                        "type": user["type"],
+                        "avatar_url": user.get("avatar_url", "")
+                    }
+                    for user in collaborators_data
+                ]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting collaborators: {e}")
+            return []
+
+    async def submit_pr_review(
+        self,
+        pr_number: int,
+        state: str = "COMMENT",
+        body: str = "",
+        event: str = "COMMENT"
+    ) -> tuple[bool, str]:
+        """Submit a review for a pull request. Returns (success, error_message)"""
+        try:
+            # GitHub API expects 'event' instead of 'state' for review submission
+            data = {
+                "event": event
+            }
+            
+            # Add body if provided or if it's required for the event type
+            if body.strip() or event in ["APPROVE", "REQUEST_CHANGES"]:
+                data["body"] = body.strip() or ("Approved" if event == "APPROVE" else "Changes requested")
+            
+            # Make direct request to get detailed error information
+            url = f"{self.base_url}/repos/{self.owner}/{self.repo}/pulls/{pr_number}/reviews"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=self.headers, json=data) as response:
+                    if response.status in [200, 201]:
+                        return True, ""
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"GitHub API error {response.status}: {error_text}")
+                        logger.error(f"Request data: {data}")
+                        return False, error_text
+        except Exception as e:
+            logger.error(f"Error submitting PR review: {e}")
+            return False, str(e)
+
+    async def auto_approve_pr(self, pr_number: int, body: str = "Auto-approved by automation system") -> tuple[bool, str]:
+        """Auto-approve a pull request (used when no reviewers are selected)"""
+        try:
+            # Get the PR author to avoid self-approval
+            pr_data = await self._make_request("GET", f"pulls/{pr_number}")
+            if not pr_data:
+                return False, "PR not found"
+            
+            author = pr_data['user']['login']
+            
+            # Check if the current user is the author (to avoid self-approval)
+            # For now, we'll use a different approach - we'll enable auto-merge instead
+            # since GitHub doesn't allow self-approval
+            
+            # Enable auto-merge for the PR
+            merge_data = {
+                "merge_method": "squash",
+                "commit_title": f"Auto-merge PR #{pr_number}",
+                "commit_message": f"Auto-merged PR #{pr_number}: {pr_data['title']}"
+            }
+            
+            url = f"{self.base_url}/repos/{self.owner}/{self.repo}/pulls/{pr_number}/merge"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.put(url, headers=self.headers, json=merge_data) as response:
+                    if response.status in [200, 201]:
+                        logger.info(f"Auto-merged PR #{pr_number}")
+                        return True, "PR auto-merged successfully"
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Auto-merge failed for PR #{pr_number}: {response.status} - {error_text}")
+                        return False, f"Auto-merge failed: {error_text}"
+                        
+        except Exception as e:
+            logger.error(f"Error auto-approving PR #{pr_number}: {e}")
+            return False, str(e)
+
+    async def get_pull_request(self, pr_number: int) -> Optional[Dict[str, Any]]:
+        """Get pull request details"""
+        try:
+            pr_data = await self._make_request("GET", f"pulls/{pr_number}")
+            if pr_data:
+                return {
+                    "number": pr_data["number"],
+                    "title": pr_data["title"],
+                    "body": pr_data.get("body", ""),
+                    "author": pr_data["user"]["login"],
+                    "state": pr_data["state"],
+                    "created_at": pr_data["created_at"],
+                    "updated_at": pr_data["updated_at"],
+                    "head": pr_data["head"]["ref"],
+                    "base": pr_data["base"]["ref"]
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Error getting pull request: {e}")
+            return None
+
+    async def get_pr_files(self, pr_number: int) -> List[Dict[str, Any]]:
+        """Get files changed in a pull request"""
+        try:
+            files_data = await self._make_request("GET", f"pulls/{pr_number}/files")
+            if files_data:
+                return [
+                    {
+                        "filename": file["filename"],
+                        "status": file["status"],
+                        "additions": file["additions"],
+                        "deletions": file["deletions"],
+                        "changes": file["changes"],
+                        "patch": file.get("patch", "")
+                    }
+                    for file in files_data
+                ]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting PR files: {e}")
+            return []

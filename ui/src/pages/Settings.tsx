@@ -41,16 +41,20 @@ import {
 import {
   FiSettings,
   FiSave,
-  FiTestTube,
+  FiPlay,
   FiKey,
   FiGitBranch,
   FiZap,
-  FiBarChart3,
+  FiBarChart,
   FiShield,
   FiCheckCircle,
   FiAlertTriangle,
 } from 'react-icons/fi'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { config } from '../utils/config'
+import apiService from '../services/apiService'
+import { ConfigTest } from '../components/ConfigTest'
+import { GitHubStatus } from '../components/GitHubStatus'
 
 interface Settings {
   github: {
@@ -114,6 +118,79 @@ export function Settings() {
   const [settings, setSettings] = useState<Settings>(defaultSettings)
   const [isSaving, setIsSaving] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Load configuration from backend API on component mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const backendConfig = await apiService.getConfig()
+        setSettings({
+          github: {
+            token: backendConfig.github.token,
+            repository: backendConfig.github.repository,
+            baseBranch: backendConfig.github.baseBranch,
+            autoMerge: backendConfig.github.autoMerge,
+            requireReviews: backendConfig.github.requireReviews,
+          },
+          groq: {
+            apiKey: backendConfig.groq.apiKey,
+            model: backendConfig.groq.model,
+            maxTokens: backendConfig.groq.maxTokens,
+            temperature: backendConfig.groq.temperature,
+          },
+          sheets: {
+            credentialsFile: backendConfig.sheets.credentialsFile,
+            spreadsheetId: backendConfig.sheets.spreadsheetId,
+            worksheetName: backendConfig.sheets.worksheetName,
+            autoSync: backendConfig.sheets.autoSync,
+            syncInterval: backendConfig.sheets.syncInterval,
+          },
+          automation: {
+            checkInterval: 3600,
+            maxConcurrentReviews: 5,
+            autoComment: true,
+            reviewAllOpen: true,
+          },
+        })
+      } catch (error) {
+        console.error('Failed to load configuration from backend:', error)
+        // Fallback to local config if backend is not available
+        setSettings({
+          github: {
+            token: config.github.token,
+            repository: config.github.repository,
+            baseBranch: config.github.baseBranch,
+            autoMerge: config.github.autoMerge,
+            requireReviews: config.github.requireReviews,
+          },
+          groq: {
+            apiKey: config.groq.apiKey,
+            model: config.groq.model,
+            maxTokens: config.groq.maxTokens,
+            temperature: config.groq.temperature,
+          },
+          sheets: {
+            credentialsFile: config.sheets.credentialsFile,
+            spreadsheetId: config.sheets.spreadsheetId,
+            worksheetName: config.sheets.worksheetName,
+            autoSync: config.sheets.autoSync,
+            syncInterval: config.sheets.syncInterval,
+          },
+          automation: {
+            checkInterval: 3600,
+            maxConcurrentReviews: 5,
+            autoComment: true,
+            reviewAllOpen: true,
+          },
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadConfig()
+  }, [])
 
   const toast = useToast()
   const cardBg = useColorModeValue('white', 'gray.700')
@@ -132,12 +209,21 @@ export function Settings() {
   const saveSettings = async () => {
     setIsSaving(true)
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      const backendConfig = {
+        github: settings.github,
+        groq: settings.groq,
+        sheets: settings.sheets,
+        app: {
+          logLevel: 'INFO',
+          logFile: 'logs/automation.log',
+        },
+      }
+      
+      await apiService.updateConfig(backendConfig)
       
       toast({
         title: 'Settings Saved',
-        description: 'Your configuration has been updated successfully',
+        description: 'Configuration has been updated successfully via backend API.',
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -145,7 +231,7 @@ export function Settings() {
     } catch (error) {
       toast({
         title: 'Save Failed',
-        description: 'Failed to save settings. Please try again.',
+        description: 'Failed to save settings. Please check your backend server is running.',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -181,6 +267,16 @@ export function Settings() {
     }
   }
 
+  if (isLoading) {
+    return (
+      <Box textAlign="center" py={20}>
+        <Text fontSize="lg" color="gray.600">
+          Loading configuration...
+        </Text>
+      </Box>
+    )
+  }
+
   return (
     <Box>
       <Flex justify="space-between" align="center" mb={6}>
@@ -204,6 +300,9 @@ export function Settings() {
         </Button>
       </Flex>
 
+      <ConfigTest />
+      <GitHubStatus />
+      
       <Tabs>
         <TabList>
           <Tab>
@@ -215,7 +314,7 @@ export function Settings() {
             Groq AI
           </Tab>
           <Tab>
-            <Icon as={FiBarChart3} mr={2} />
+            <Icon as={FiBarChart} mr={2} />
             Google Sheets
           </Tab>
           <Tab>
@@ -288,7 +387,7 @@ export function Settings() {
                     </FormControl>
 
                     <Button
-                      leftIcon={<FiTestTube />}
+                      leftIcon={<FiPlay />}
                       onClick={() => testConnection('GitHub')}
                       isLoading={isTesting}
                       loadingText="Testing..."
@@ -368,7 +467,7 @@ export function Settings() {
                     </FormControl>
 
                     <Button
-                      leftIcon={<FiTestTube />}
+                      leftIcon={<FiPlay />}
                       onClick={() => testConnection('Groq AI')}
                       isLoading={isTesting}
                       loadingText="Testing..."
@@ -447,7 +546,7 @@ export function Settings() {
                     </FormControl>
 
                     <Button
-                      leftIcon={<FiTestTube />}
+                      leftIcon={<FiPlay />}
                       onClick={() => testConnection('Google Sheets')}
                       isLoading={isTesting}
                       loadingText="Testing..."
