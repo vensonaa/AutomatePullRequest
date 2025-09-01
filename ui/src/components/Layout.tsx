@@ -50,6 +50,7 @@ const LinkItems: Array<LinkItemProps> = [
   { name: 'Review PR', icon: FiEye, path: '/review-pr' },
   { name: 'AI Reviews', icon: FiDatabase, path: '/ai-reviews' },
   { name: 'Tracking', icon: FiBarChart, path: '/tracking' },
+  { name: 'Automation', icon: FiZap, path: '/automation' },
   { name: 'Settings', icon: FiSettings, path: '/settings' },
 ]
 
@@ -107,7 +108,13 @@ const SidebarContent = ({ onClose, ...rest }: SidebarProps) => {
       h="full"
       {...rest}>
       <Flex h="20" alignItems="center" mx="8" justifyContent="space-between">
-        <Text fontSize="2xl" fontFamily="monospace" fontWeight="bold">
+        <Text 
+          fontSize="2xl" 
+          fontFamily="monospace" 
+          fontWeight="bold"
+          bgGradient="linear(to-r, brand.400, purple.400)"
+          bgClip="text"
+        >
           🤖 PR Bot
         </Text>
         <CloseButton display={{ base: 'flex', md: 'none' }} onClick={onClose} />

@@ -335,8 +335,8 @@ export function PRCreation() {
             leftIcon={<FiCheckCircle />}
             onClick={async () => {
               try {
-                const isConnected = await githubService.testConnection()
-                if (isConnected) {
+                const response = await apiService.testGitHubConnection()
+                if (response.success) {
                   toast({
                     title: 'GitHub Connection Test',
                     description: 'Successfully connected to GitHub API',
@@ -347,7 +347,7 @@ export function PRCreation() {
                 } else {
                   toast({
                     title: 'GitHub Connection Test',
-                    description: 'Failed to connect to GitHub API. Check your token and repository.',
+                    description: response.error || 'Failed to connect to GitHub API. Check your token and repository.',
                     status: 'error',
                     duration: 5000,
                     isClosable: true,

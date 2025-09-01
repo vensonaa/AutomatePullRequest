@@ -101,16 +101,45 @@ export function Login() {
   }
 
   return (
-    <Box minH="100vh" bg={useColorModeValue('gray.50', 'gray.900')} py={20}>
-      <Flex justify="center" align="center">
+    <Box 
+      minH="100vh" 
+      bgGradient="linear(to-br, brand.50, purple.50, pink.50)" 
+      py={20}
+      position="relative"
+      overflow="hidden"
+    >
+      {/* Background decorative elements */}
+      <Box
+        position="absolute"
+        top="-50%"
+        right="-50%"
+        w="100%"
+        h="100%"
+        bgGradient="radial(circle, brand.100 0%, transparent 70%)"
+        opacity="0.3"
+        transform="rotate(45deg)"
+      />
+      <Box
+        position="absolute"
+        bottom="-50%"
+        left="-50%"
+        w="100%"
+        h="100%"
+        bgGradient="radial(circle, purple.100 0%, transparent 70%)"
+        opacity="0.3"
+        transform="rotate(-45deg)"
+      />
+      
+      <Flex justify="center" align="center" position="relative" zIndex={1}>
         <Card 
-          bg={cardBg} 
-          border="1px" 
-          borderColor={borderColor}
-          shadow="xl"
+          variant="elevated"
           maxW="md"
           w="full"
           mx={4}
+          backdropFilter="blur(10px)"
+          bg="rgba(255, 255, 255, 0.9)"
+          border="1px solid"
+          borderColor="white"
         >
           <CardBody p={8}>
             <VStack spacing={6} align="stretch">
@@ -118,16 +147,22 @@ export function Login() {
               <Box textAlign="center">
                 <Flex justify="center" mb={4}>
                   <Box
-                    p={3}
+                    p={4}
                     borderRadius="full"
-                    bg="brand.500"
+                    bgGradient="linear(to-r, brand.400, purple.400)"
                     color="white"
-                    fontSize="2xl"
+                    fontSize="3xl"
+                    boxShadow="glow"
+                    _hover={{
+                      transform: 'scale(1.1) rotate(5deg)',
+                      boxShadow: 'glow-purple',
+                    }}
+                    transition="all 0.3s ease"
                   >
                     <FiZap />
                   </Box>
                 </Flex>
-                <Heading size="lg" mb={2}>
+                <Heading size="lg" mb={2} bgGradient="linear(to-r, brand.600, purple.600)" bgClip="text">
                   Welcome Back
                 </Heading>
                 <Text color="gray.600">
@@ -136,11 +171,11 @@ export function Login() {
               </Box>
 
               {/* Demo Login Alert */}
-              <Alert status="info" borderRadius="md">
-                <AlertIcon />
+              <Alert status="info" borderRadius="xl" bgGradient="linear(to-r, blue.50, indigo.50)">
+                <AlertIcon color="blue.500" />
                 <Box>
-                  <AlertTitle>Demo Mode</AlertTitle>
-                  <AlertDescription>
+                  <AlertTitle color="blue.700">Demo Mode</AlertTitle>
+                  <AlertDescription color="blue.600">
                     Use any email/password combination to login. 
                     Or click "Try Demo" for quick access.
                   </AlertDescription>
@@ -151,24 +186,44 @@ export function Login() {
               <form onSubmit={handleSubmit}>
                 <VStack spacing={4}>
                   <FormControl isRequired>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel fontWeight="medium" color="gray.700">Email</FormLabel>
                     <Input
                       type="email"
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       size="lg"
+                      borderRadius="xl"
+                      border="2px solid"
+                      borderColor="gray.200"
+                      _focus={{
+                        borderColor: 'brand.400',
+                        boxShadow: '0 0 0 1px var(--chakra-colors-brand-400)',
+                      }}
+                      _hover={{
+                        borderColor: 'brand.300',
+                      }}
                     />
                   </FormControl>
 
                   <FormControl isRequired>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel fontWeight="medium" color="gray.700">Password</FormLabel>
                     <InputGroup size="lg">
                       <Input
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        borderRadius="xl"
+                        border="2px solid"
+                        borderColor="gray.200"
+                        _focus={{
+                          borderColor: 'brand.400',
+                          boxShadow: '0 0 0 1px var(--chakra-colors-brand-400)',
+                        }}
+                        _hover={{
+                          borderColor: 'brand.300',
+                        }}
                       />
                       <InputRightElement>
                         <IconButton
@@ -177,6 +232,8 @@ export function Login() {
                           onClick={() => setShowPassword(!showPassword)}
                           variant="ghost"
                           size="sm"
+                          color="gray.500"
+                          _hover={{ color: 'brand.500' }}
                         />
                       </InputRightElement>
                     </InputGroup>
@@ -184,11 +241,20 @@ export function Login() {
 
                   <Button
                     type="submit"
-                    colorScheme="brand"
+                    variant="gradient"
                     size="lg"
                     w="full"
                     isLoading={isLoading}
                     loadingText="Signing in..."
+                    borderRadius="xl"
+                    py={6}
+                    fontSize="lg"
+                    fontWeight="bold"
+                    _hover={{
+                      transform: 'translateY(-2px)',
+                      boxShadow: 'xl',
+                    }}
+                    transition="all 0.2s"
                   >
                     Sign In
                   </Button>
@@ -197,12 +263,20 @@ export function Login() {
 
               {/* Demo Login Button */}
               <Button
-                variant="outline"
+                variant="vibrant"
                 size="lg"
                 w="full"
                 onClick={handleDemoLogin}
                 leftIcon={<FiGithub />}
-                colorScheme="gray"
+                borderRadius="xl"
+                py={6}
+                fontSize="lg"
+                fontWeight="bold"
+                _hover={{
+                  transform: 'translateY(-2px)',
+                  boxShadow: 'xl',
+                }}
+                transition="all 0.2s"
               >
                 Try Demo
               </Button>

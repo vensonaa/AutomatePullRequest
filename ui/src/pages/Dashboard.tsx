@@ -26,6 +26,7 @@ import {
   AlertIcon,
   AlertTitle,
   AlertDescription,
+  useToast,
 } from '@chakra-ui/react'
 import {
   LineChart,
@@ -94,6 +95,7 @@ export function Dashboard() {
   
   const cardBg = useColorModeValue('white', 'gray.700')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
+  const toast = useToast()
 
   const loadDashboardData = async () => {
     try {
@@ -101,22 +103,22 @@ export function Dashboard() {
       setError(null)
       
       // Fetch stats
-      const statsData = await apiService.getStats()
+      const statsData = await apiService.getStats() as any
       setStats({
-        totalPRs: statsData.totalPRs || 0,
-        openPRs: statsData.openPRs || 0,
-        approvedPRs: statsData.approvedPRs || 0,
-        pendingReviews: statsData.pendingReviews || 0,
-        avgReviewTime: statsData.avgReviewTime || '0h',
-        approvalRate: statsData.approvalRate || 0,
+        totalPRs: statsData.totalPRs ?? 0,
+        openPRs: statsData.openPRs ?? 0,
+        approvedPRs: statsData.approvedPRs ?? 0,
+        pendingReviews: statsData.pendingReviews ?? 0,
+        avgReviewTime: statsData.avgReviewTime ?? '0h',
+        approvalRate: statsData.approvalRate ?? 0,
       })
       
       // Fetch recent PRs
-      const prsResponse = await apiService.getPullRequests()
-      const prs = prsResponse.prs || []
+      const prsResponse = await apiService.getPullRequests() as any
+      const apiPRs = prsResponse.prs || []
       
       // Convert to dashboard format and take last 5
-      const dashboardPRs: PRData[] = prs.slice(0, 5).map((pr: any) => ({
+      const dashboardPRs: PRData[] = apiPRs.slice(0, 5).map((pr: any) => ({
         id: pr.number,
         number: pr.number,
         title: pr.title,
@@ -130,21 +132,28 @@ export function Dashboard() {
       
       // Generate chart data from stats
       const chartDataFromStats = [
-        { name: 'Total', PRs: statsData.totalPRs || 0, Reviews: 0, Approvals: statsData.approvedPRs || 0 },
-        { name: 'Open', PRs: statsData.openPRs || 0, Reviews: 0, Approvals: 0 },
-        { name: 'Closed', PRs: (statsData.totalPRs || 0) - (statsData.openPRs || 0), Reviews: 0, Approvals: 0 },
+        { name: 'Total', PRs: statsData.totalPRs ?? 0, Reviews: 0, Approvals: statsData.approvedPRs ?? 0 },
+        { name: 'Open', PRs: statsData.openPRs ?? 0, Reviews: 0, Approvals: 0 },
+        { name: 'Closed', PRs: (statsData.totalPRs ?? 0) - (statsData.openPRs ?? 0), Reviews: 0, Approvals: 0 },
       ]
       setChartData(chartDataFromStats)
       
       // Generate pie chart data
       const pieDataFromStats = [
-        { name: 'Open', value: statsData.openPRs || 0, color: '#3182CE' },
-        { name: 'Approved', value: statsData.approvedPRs || 0, color: '#38A169' },
-        { name: 'Pending Review', value: statsData.pendingReviews || 0, color: '#D69E2E' },
-        { name: 'Closed', value: (statsData.totalPRs || 0) - (statsData.openPRs || 0), color: '#E53E3E' },
+        { name: 'Open', value: statsData.openPRs ?? 0, color: '#3182CE' },
+        { name: 'Approved', value: statsData.approvedPRs ?? 0, color: '#38A169' },
+        { name: 'Pending Review', value: statsData.pendingReviews ?? 0, color: '#D69E2E' },
+        { name: 'Closed', value: (statsData.totalPRs ?? 0) - (statsData.openPRs ?? 0), color: '#E53E3E' },
       ].filter(item => item.value > 0)
       setPieData(pieDataFromStats)
       
+      toast({
+        title: 'Data Loaded',
+        description: 'Dashboard data loaded from backend',
+        status: 'success',
+        duration: 1500,
+        isClosable: true,
+      })
     } catch (err: any) {
       console.error('Failed to load dashboard data:', err)
       setError(err?.message || 'Failed to load dashboard data')
