@@ -7,7 +7,7 @@ Provides API endpoints for configuration management and automation operations
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import uvicorn
 import os
 import aiohttp
@@ -32,6 +32,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global automation instance
+automation: Optional[GitHubPRAutomation] = None
+
 # Pydantic models for API requests/responses
 class ConfigUpdate(BaseModel):
     github: Optional[Dict[str, Any]] = None
@@ -44,6 +47,25 @@ class ConfigResponse(BaseModel):
     groq: Dict[str, Any]
     sheets: Dict[str, Any]
     app: Dict[str, Any]
+
+class AIReviewResponse(BaseModel):
+    review: Dict[str, Any]
+    comments: List[Dict[str, Any]]
+    files: List[Dict[str, Any]]
+    metadata: Optional[Dict[str, Any]] = None
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize automation service on startup"""
+    global automation
+    try:
+        config = load_config()
+        automation = GitHubPRAutomation(config)
+        await automation.initialize()
+        print("✅ Automation service initialized successfully")
+    except Exception as e:
+        print(f"❌ Failed to initialize automation service: {e}")
+        raise
 
 @app.get("/")
 async def root():
@@ -345,6 +367,37 @@ async def get_pr_files(pr_number: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get PR files: {str(e)}")
 
+@app.get("/api/github/pull-requests/{pr_number}/reviews")
+async def get_pr_reviews(pr_number: int):
+    """Get all reviews for a pull request"""
+    try:
+        config = load_config()
+        automation = GitHubPRAutomation(config)
+        
+        reviews = await automation.github_service.get_pr_reviews(pr_number)
+        return {"reviews": reviews}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get PR reviews: {str(e)}")
+
+@app.delete("/api/github/pull-requests/{pr_number}/reviews/{review_id}")
+async def delete_pr_review(pr_number: int, review_id: int):
+    """Delete a specific review from a pull request"""
+    try:
+        config = load_config()
+        automation = GitHubPRAutomation(config)
+        
+        success, message = await automation.github_service.delete_pr_review(pr_number, review_id)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"Review {review_id} deleted successfully from PR #{pr_number}"
+            }
+        else:
+            raise HTTPException(status_code=400, detail=message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete review: {str(e)}")
+
 @app.post("/api/github/pull-requests/{pr_number}/ai-review")
 async def ai_review_pr(pr_number: int):
     """Perform AI review of a pull request"""
@@ -393,6 +446,23 @@ async def ai_review_pr(pr_number: int):
         
         # Perform AI review
         review = await automation.groq_service.review_pull_request(pr_data, files)
+        
+        # Persist AI review so it appears in the AI Reviews page
+        try:
+            metadata = {
+                "ai_model": config.groq.model
+            }
+            # Initialize database if needed and save
+            await automation.initialize()  # no-op if already initialized
+            await automation.database_service.save_ai_review(
+                pr_data=pr_data,
+                review=review,
+                files=files,
+                metadata=metadata
+            )
+        except Exception as persist_error:
+            # Do not fail the endpoint if persistence fails; just log to stdout
+            print(f"Warning: Failed to persist AI review for PR #{pr_number}: {persist_error}")
         
         return {
             "success": True,
@@ -487,6 +557,79 @@ async def get_stats():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+# AI Review Persistence Endpoints
+@app.get("/api/ai-reviews/stats")
+async def get_ai_review_statistics():
+    """Get statistics about persisted AI reviews"""
+    try:
+        if not automation:
+            raise HTTPException(status_code=500, detail="Automation service not initialized")
+        
+        stats = await automation.get_review_statistics()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get AI review statistics: {str(e)}")
+
+@app.get("/api/ai-reviews/search")
+async def search_ai_reviews(query: str, limit: int = 50):
+    """Search persisted AI reviews by content"""
+    try:
+        if not automation:
+            raise HTTPException(status_code=500, detail="Automation service not initialized")
+        
+        reviews = await automation.search_ai_reviews(query, limit)
+        return {
+            "reviews": reviews,
+            "query": query,
+            "total": len(reviews),
+            "limit": limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to search AI reviews: {str(e)}")
+
+@app.get("/api/ai-reviews")
+async def get_all_ai_reviews(
+    limit: int = 100,
+    offset: int = 0,
+    author: Optional[str] = None
+):
+    """Get all persisted AI reviews with optional filtering"""
+    try:
+        if not automation:
+            raise HTTPException(status_code=500, detail="Automation service not initialized")
+        
+        reviews = await automation.get_all_ai_reviews(
+            limit=limit,
+            offset=offset,
+            author=author
+        )
+        
+        return {
+            "reviews": reviews,
+            "total": len(reviews),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get AI reviews: {str(e)}")
+
+@app.get("/api/ai-reviews/{pr_number}")
+async def get_ai_review(pr_number: int):
+    """Get a persisted AI review by PR number"""
+    try:
+        if not automation:
+            raise HTTPException(status_code=500, detail="Automation service not initialized")
+        
+        review_data = await automation.get_ai_review(pr_number)
+        if not review_data:
+            raise HTTPException(status_code=404, detail=f"AI review not found for PR #{pr_number}")
+        
+        return review_data
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get AI review: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -568,6 +568,46 @@ class GitHubService:
             logger.error(f"Error auto-approving PR #{pr_number}: {e}")
             return False, str(e)
 
+    async def get_pr_reviews(self, pr_number: int) -> List[Dict[str, Any]]:
+        """Get all reviews for a pull request"""
+        try:
+            reviews_data = await self._make_request("GET", f"pulls/{pr_number}/reviews")
+            if reviews_data:
+                return [
+                    {
+                        "id": review["id"],
+                        "user": review["user"]["login"],
+                        "body": review.get("body", ""),
+                        "state": review["state"],
+                        "submitted_at": review["submitted_at"],
+                        "commit_id": review["commit_id"]
+                    }
+                    for review in reviews_data
+                ]
+            return []
+        except Exception as e:
+            logger.error(f"Error getting PR reviews: {e}")
+            return []
+
+    async def delete_pr_review(self, pr_number: int, review_id: int) -> tuple[bool, str]:
+        """Delete a specific review from a pull request"""
+        try:
+            url = f"{self.base_url}/repos/{self.owner}/{self.repo}/pulls/{pr_number}/reviews/{review_id}"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.delete(url, headers=self.headers) as response:
+                    if response.status in [200, 204]:
+                        logger.info(f"Deleted review {review_id} from PR #{pr_number}")
+                        return True, "Review deleted successfully"
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Failed to delete review {review_id} from PR #{pr_number}: {response.status} - {error_text}")
+                        return False, f"Failed to delete review: {error_text}"
+                        
+        except Exception as e:
+            logger.error(f"Error deleting PR review: {e}")
+            return False, str(e)
+
     async def get_pull_request(self, pr_number: int) -> Optional[Dict[str, Any]]:
         """Get pull request details"""
         try:

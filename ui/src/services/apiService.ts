@@ -92,10 +92,46 @@ class ApiService {
     return this.request(`/api/github/pull-requests/${prNumber}/files`)
   }
 
+  async getPRReviews(prNumber: number) {
+    return this.request(`/api/github/pull-requests/${prNumber}/reviews`)
+  }
+
+  async deletePRReview(prNumber: number, reviewId: number) {
+    return this.request(`/api/github/pull-requests/${prNumber}/reviews/${reviewId}`, {
+      method: 'DELETE',
+    })
+  }
+
   async performAIReview(prNumber: number) {
     return this.request(`/api/github/pull-requests/${prNumber}/ai-review`, {
       method: 'POST',
     })
+  }
+
+  // AI Review Persistence APIs
+  async getAIReview(prNumber: number) {
+    return this.request(`/api/ai-reviews/${prNumber}`)
+  }
+
+  async getAllAIReviews(limit: number = 100, offset: number = 0, author?: string) {
+    const params = new URLSearchParams({
+      limit: limit.toString(),
+      offset: offset.toString(),
+      ...(author && { author })
+    })
+    return this.request(`/api/ai-reviews?${params}`)
+  }
+
+  async getAIReviewStatistics() {
+    return this.request('/api/ai-reviews/stats')
+  }
+
+  async searchAIReviews(query: string, limit: number = 50) {
+    const params = new URLSearchParams({
+      query,
+      limit: limit.toString()
+    })
+    return this.request(`/api/ai-reviews/search?${params}`)
   }
 
   // Health check

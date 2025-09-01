@@ -39,6 +39,14 @@ import {
   Code,
   Textarea,
   Select,
+  IconButton,
+  Checkbox,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
 } from '@chakra-ui/react'
 import {
   FiEye,
@@ -54,6 +62,8 @@ import {
   FiThumbsDown,
   FiSend,
   FiRefreshCw,
+  FiTrash2,
+  FiDatabase,
 } from 'react-icons/fi'
 import { useState, useEffect } from 'react'
 import apiService from '../services/apiService'
@@ -115,10 +125,56 @@ export function PRReview() {
     suggestions: string[]
     issues: string[]
   } | null>(null)
+  const [prReviews, setPrReviews] = useState<Array<{
+    id: number
+    user: string
+    body: string
+    state: string
+    submitted_at: string
+  }>>([])
+  const [selectedReviews, setSelectedReviews] = useState<Set<number>>(new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteType, setDeleteType] = useState<'selected' | 'all' | 'single' | null>(null)
+  const [singleReviewId, setSingleReviewId] = useState<number | null>(null)
+  const [persistedAIReviews, setPersistedAIReviews] = useState<Set<number>>(new Set())
+  const [isPRApproved, setIsPRApproved] = useState(false)
 
   const toast = useToast()
   const cardBg = useColorModeValue('white', 'gray.700')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
+
+  // Check for persisted AI reviews
+  const checkPersistedAIReviews = async (prNumbers: number[]) => {
+    try {
+      const persistedReviews = new Set<number>()
+      for (const prNumber of prNumbers) {
+        try {
+          await apiService.getAIReview(prNumber)
+          persistedReviews.add(prNumber)
+        } catch (error) {
+          // AI review doesn't exist for this PR
+        }
+      }
+      setPersistedAIReviews(persistedReviews)
+    } catch (error) {
+      console.error('Error checking persisted AI reviews:', error)
+    }
+  }
+
+  const checkPRApprovalStatus = (pr: PRReview) => {
+    // Check if PR status is approved
+    if (pr.status === 'approved') {
+      return true
+    }
+    
+    // Check if any existing reviews are approvals
+    const hasApprovalReview = prReviews.some(review => 
+      review.state === 'APPROVED' || review.state === 'approved'
+    )
+    
+    return hasApprovalReview
+  }
 
   // Fetch PRs from API
   useEffect(() => {
@@ -150,6 +206,9 @@ export function PRReview() {
         }))
         
         setPRs(convertedPRs)
+        
+        // Check for persisted AI reviews
+        await checkPersistedAIReviews(convertedPRs.map(pr => pr.id))
       } catch (err: any) {
         console.error('Failed to fetch PRs:', err)
         setError(err.message || 'Failed to load pull requests')
@@ -197,6 +256,134 @@ export function PRReview() {
       console.error('Failed to fetch PR files:', error)
       setSelectedPRFiles([])
     }
+  }
+
+  const fetchPRReviews = async (prNumber: number) => {
+    try {
+      const response = await apiService.getPRReviews(prNumber)
+      const reviews = response.reviews || []
+      setPrReviews(reviews)
+      
+      // Update approval status after fetching reviews
+      if (selectedPR) {
+        const isApproved = checkPRApprovalStatus(selectedPR)
+        setIsPRApproved(isApproved)
+      }
+    } catch (error) {
+      console.error('Failed to fetch PR reviews:', error)
+      setPrReviews([])
+    }
+  }
+
+  const confirmDeleteReview = (reviewId: number) => {
+    setDeleteType('single')
+    setSingleReviewId(reviewId)
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteSelected = () => {
+    setDeleteType('selected')
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteAll = () => {
+    setDeleteType('all')
+    setShowDeleteConfirm(true)
+  }
+
+  const executeDelete = async () => {
+    if (!selectedPR) return
+
+    setIsDeleting(true)
+    try {
+      if (deleteType === 'single' && singleReviewId) {
+        await apiService.deletePRReview(selectedPR.id, singleReviewId)
+        toast({
+          title: 'Review Deleted',
+          description: 'The review has been deleted successfully',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+      } else if (deleteType === 'selected') {
+        const deletePromises = Array.from(selectedReviews).map(reviewId => 
+          apiService.deletePRReview(selectedPR.id, reviewId)
+        )
+        await Promise.all(deletePromises)
+        toast({
+          title: 'Reviews Deleted',
+          description: `${selectedReviews.size} review(s) have been deleted successfully`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        setSelectedReviews(new Set())
+      } else if (deleteType === 'all') {
+        const deletePromises = prReviews.map(review => 
+          apiService.deletePRReview(selectedPR.id, review.id)
+        )
+        await Promise.all(deletePromises)
+        toast({
+          title: 'All Reviews Deleted',
+          description: `${prReviews.length} review(s) have been deleted successfully`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        })
+        setSelectedReviews(new Set())
+      }
+      
+      // Refresh the reviews list
+      await fetchPRReviews(selectedPR.id)
+    } catch (error: any) {
+      console.error('Failed to delete review(s):', error)
+      
+      let errorMessage = 'Failed to delete review(s)'
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      toast({
+        title: 'Delete Failed',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
+      setDeleteType(null)
+      setSingleReviewId(null)
+    }
+  }
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false)
+    setDeleteType(null)
+    setSingleReviewId(null)
+  }
+
+
+
+  const toggleReviewSelection = (reviewId: number) => {
+    const newSelection = new Set(selectedReviews)
+    if (newSelection.has(reviewId)) {
+      newSelection.delete(reviewId)
+    } else {
+      newSelection.add(reviewId)
+    }
+    setSelectedReviews(newSelection)
+  }
+
+  const selectAllReviews = () => {
+    setSelectedReviews(new Set(prReviews.map(review => review.id)))
+  }
+
+  const clearSelection = () => {
+    setSelectedReviews(new Set())
   }
 
   const getSeverityColor = (severity: string) => {
@@ -259,6 +446,18 @@ export function PRReview() {
     if (!selectedPR) return
 
     try {
+      // If PR is already approved, only allow comments
+      if (isPRApproved && reviewAction !== 'comment') {
+        toast({
+          title: 'Review Action Not Allowed',
+          description: 'This PR is already approved. You can only add comments.',
+          status: 'warning',
+          duration: 3000,
+          isClosable: true,
+        })
+        return
+      }
+
       // Map frontend review action to GitHub API event
       let event = 'COMMENT'
       
@@ -375,6 +574,13 @@ export function PRReview() {
                     onClick={() => {
                       setSelectedPR(pr)
                       fetchPRFiles(pr.id)
+                      fetchPRReviews(pr.id)
+                      
+                      // Check approval status after fetching reviews
+                      setTimeout(() => {
+                        const isApproved = checkPRApprovalStatus(pr)
+                        setIsPRApproved(isApproved)
+                      }, 100)
                     }}
                   >
                     <HStack justify="space-between" mb={2}>
@@ -436,15 +642,27 @@ export function PRReview() {
                         by {selectedPR.author} • {selectedPR.branch} → {selectedPR.baseBranch}
                       </Text>
                     </Box>
-                    <Button
-                      leftIcon={<FiZap />}
-                      onClick={() => startAIReview(selectedPR)}
-                      isLoading={isReviewing}
-                      loadingText="Reviewing..."
-                      variant="gradient"
-                    >
-                      AI Review
-                    </Button>
+                    <HStack spacing={2}>
+                      <Button
+                        leftIcon={<FiZap />}
+                        onClick={() => startAIReview(selectedPR)}
+                        isLoading={isReviewing}
+                        loadingText="Reviewing..."
+                        variant="gradient"
+                      >
+                        AI Review
+                      </Button>
+                      {persistedAIReviews.has(selectedPR.id) && (
+                        <Button
+                          leftIcon={<FiDatabase />}
+                          onClick={() => window.open(`/ai-reviews?pr=${selectedPR.id}`, '_blank')}
+                          variant="outline"
+                          colorScheme="blue"
+                        >
+                          View Saved Review
+                        </Button>
+                      )}
+                    </HStack>
                   </HStack>
                 </CardHeader>
                 <CardBody>
@@ -481,6 +699,7 @@ export function PRReview() {
                   <Tabs>
                     <TabList>
                       <Tab>AI Review</Tab>
+                      <Tab>Reviews</Tab>
                       <Tab>Suggestions</Tab>
                       <Tab>Comments</Tab>
                       <Tab>Files</Tab>
@@ -572,6 +791,116 @@ export function PRReview() {
                       </TabPanel>
                       
                       <TabPanel>
+                        <VStack align="stretch" spacing={4}>
+                          {/* Delete Options Header */}
+                          {prReviews.length > 0 && (
+                            <Box p={3} bg="gray.50" borderRadius="md">
+                              <HStack justify="space-between" mb={3}>
+                                <Text fontSize="sm" fontWeight="semibold">
+                                  Delete Options
+                                </Text>
+                                <HStack spacing={2}>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={selectAllReviews}
+                                    isDisabled={selectedReviews.size === prReviews.length}
+                                  >
+                                    Select All
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={clearSelection}
+                                    isDisabled={selectedReviews.size === 0}
+                                  >
+                                    Clear
+                                  </Button>
+                                </HStack>
+                              </HStack>
+                              
+                              <HStack spacing={2}>
+                                <Button
+                                  size="sm"
+                                  colorScheme="red"
+                                  variant="outline"
+                                  onClick={confirmDeleteSelected}
+                                  isDisabled={selectedReviews.size === 0}
+                                  isLoading={isDeleting}
+                                  leftIcon={<FiTrash2 />}
+                                >
+                                  Delete Selected ({selectedReviews.size})
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  colorScheme="red"
+                                  variant="solid"
+                                  onClick={confirmDeleteAll}
+                                  isLoading={isDeleting}
+                                  leftIcon={<FiTrash2 />}
+                                >
+                                  Delete All ({prReviews.length})
+                                </Button>
+                              </HStack>
+                            </Box>
+                          )}
+
+                          {/* Reviews List */}
+                          {prReviews.length > 0 ? (
+                            prReviews.map((review) => (
+                              <Box
+                                key={review.id}
+                                p={4}
+                                border="1px"
+                                borderColor={borderColor}
+                                borderRadius="md"
+                                position="relative"
+                                bg={selectedReviews.has(review.id) ? "blue.50" : "transparent"}
+                              >
+                                <HStack justify="space-between" mb={2}>
+                                  <HStack>
+                                    <Checkbox
+                                      isChecked={selectedReviews.has(review.id)}
+                                      onChange={() => toggleReviewSelection(review.id)}
+                                      colorScheme="blue"
+                                    />
+                                    <Text fontSize="sm" fontWeight="semibold">
+                                      {review.user}
+                                    </Text>
+                                    <Badge colorScheme={getStatusColor(review.state)} size="sm">
+                                      {review.state}
+                                    </Badge>
+                                  </HStack>
+                                  <IconButton
+                                    aria-label="Delete review"
+                                    icon={<FiTrash2 />}
+                                    size="sm"
+                                    colorScheme="red"
+                                    variant="ghost"
+                                    onClick={() => confirmDeleteReview(review.id)}
+                                  />
+                                </HStack>
+                                <Text fontSize="sm" mb={2} color="gray.600">
+                                  {new Date(review.submitted_at).toLocaleString()}
+                                </Text>
+                                {review.body && (
+                                  <Text fontSize="sm" whiteSpace="pre-wrap">
+                                    {review.body}
+                                  </Text>
+                                )}
+                              </Box>
+                            ))
+                          ) : (
+                            <Box textAlign="center" py={8}>
+                              <Text color="gray.500">
+                                No reviews submitted yet for this PR.
+                              </Text>
+                            </Box>
+                          )}
+                        </VStack>
+                      </TabPanel>
+                      
+                      <TabPanel>
                         <VStack align="stretch" spacing={3}>
                           {selectedPR.aiSuggestions.map((suggestion, index) => (
                             <Alert key={index} status="info">
@@ -633,28 +962,41 @@ export function PRReview() {
                 </CardHeader>
                 <CardBody>
                   <VStack spacing={4}>
-                    <Alert status="info" variant="subtle">
-                      <AlertIcon />
-                      <Box>
-                        <AlertTitle>Review Limitation</AlertTitle>
-                        <AlertDescription>
-                          You cannot approve your own pull request. This is a GitHub security feature. 
-                          You can still add comments and request changes.
-                        </AlertDescription>
-                      </Box>
-                    </Alert>
+                    {isPRApproved ? (
+                      <Alert status="success" variant="subtle">
+                        <AlertIcon />
+                        <Box>
+                          <AlertTitle>PR Already Approved</AlertTitle>
+                          <AlertDescription>
+                            This pull request has already been approved. You can still add comments but cannot change the approval status.
+                          </AlertDescription>
+                        </Box>
+                      </Alert>
+                    ) : (
+                      <Alert status="info" variant="subtle">
+                        <AlertIcon />
+                        <Box>
+                          <AlertTitle>Review Limitation</AlertTitle>
+                          <AlertDescription>
+                            You cannot approve your own pull request. This is a GitHub security feature. 
+                            You can still add comments and request changes.
+                          </AlertDescription>
+                        </Box>
+                      </Alert>
+                    )}
                     
                     <Select
                       value={reviewAction}
                       onChange={(e) => setReviewAction(e.target.value as any)}
+                      isDisabled={isPRApproved}
                     >
                       <option value="comment">Comment</option>
-                      <option value="approve">Approve</option>
-                      <option value="request_changes">Request Changes</option>
+                      <option value="approve" disabled={isPRApproved}>Approve</option>
+                      <option value="request_changes" disabled={isPRApproved}>Request Changes</option>
                     </Select>
                     
                     <Textarea
-                      placeholder="Add your review comment..."
+                      placeholder={isPRApproved ? "Add a comment to the approved PR..." : "Add your review comment..."}
                       value={reviewComment}
                       onChange={(e) => setReviewComment(e.target.value)}
                       rows={4}
@@ -666,6 +1008,7 @@ export function PRReview() {
                         colorScheme="green"
                         variant={reviewAction === 'approve' ? 'solid' : 'outline'}
                         onClick={() => setReviewAction('approve')}
+                        isDisabled={isPRApproved}
                       >
                         Approve
                       </Button>
@@ -674,6 +1017,7 @@ export function PRReview() {
                         colorScheme="red"
                         variant={reviewAction === 'request_changes' ? 'solid' : 'outline'}
                         onClick={() => setReviewAction('request_changes')}
+                        isDisabled={isPRApproved}
                       >
                         Request Changes
                       </Button>
@@ -682,6 +1026,7 @@ export function PRReview() {
                         onClick={submitReview}
                         variant="gradient"
                         ml="auto"
+                        isDisabled={isPRApproved && reviewAction !== 'comment'}
                       >
                         Submit Review
                       </Button>
@@ -702,6 +1047,47 @@ export function PRReview() {
           )}
         </GridItem>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        isOpen={showDeleteConfirm}
+        onClose={cancelDelete}
+        isCentered
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              Confirm Delete
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              {deleteType === 'single' && (
+                <Text>Are you sure you want to delete this review? This action cannot be undone.</Text>
+              )}
+              {deleteType === 'selected' && (
+                <Text>Are you sure you want to delete {selectedReviews.size} selected review(s)? This action cannot be undone.</Text>
+              )}
+              {deleteType === 'all' && (
+                <Text>Are you sure you want to delete all {prReviews.length} reviews? This action cannot be undone.</Text>
+              )}
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button onClick={cancelDelete}>
+                Cancel
+              </Button>
+              <Button 
+                colorScheme="red" 
+                onClick={executeDelete} 
+                ml={3}
+                isLoading={isDeleting}
+              >
+                Delete
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Box>
   )
 }

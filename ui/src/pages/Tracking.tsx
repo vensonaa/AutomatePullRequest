@@ -44,7 +44,8 @@ import {
   FiTrendingUp,
   FiUsers,
 } from 'react-icons/fi'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import apiService from '../services/apiService'
 
 interface TrackingData {
   prNumber: number
@@ -59,10 +60,8 @@ interface TrackingData {
   branch: string
 }
 
-// TODO: Replace with real API calls
-const mockTrackingData: TrackingData[] = []
-
-const mockStats = {
+// Initial empty state
+const initialStats = {
   totalPRs: 0,
   openPRs: 0,
   approvedPRs: 0,
@@ -73,6 +72,8 @@ const mockStats = {
 
 export function Tracking() {
   const [isLoading, setIsLoading] = useState(false)
+  const [stats, setStats] = useState(initialStats)
+  const [trackingData, setTrackingData] = useState<TrackingData[]>([])
   const [filterStatus, setFilterStatus] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -106,20 +107,66 @@ export function Tracking() {
     }
   }
 
-  const refreshData = () => {
-    setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
+  const loadData = async () => {
+    try {
+      setIsLoading(true)
+      // Fetch stats
+      const s = await apiService.getStats()
+      setStats({
+        totalPRs: s.totalPRs ?? 0,
+        openPRs: s.openPRs ?? 0,
+        approvedPRs: s.approvedPRs ?? 0,
+        pendingReviews: s.pendingReviews ?? 0,
+        avgReviewTime: s.avgReviewTime ?? '0h',
+        approvalRate: s.approvalRate ?? 0,
+      })
+
+      // Fetch PR list
+      const prsResp = await apiService.getPullRequests()
+      const apiPRs = prsResp.prs || []
+      const rows: TrackingData[] = apiPRs.map((pr: any) => ({
+        prNumber: pr.number,
+        title: pr.title,
+        status: pr.state,
+        createdDate: pr.created_at,
+        reviewStatus: pr.state === 'open' ? 'pending' : 'approved',
+        approvals: pr.state !== 'open' ? '✅ Approved' : '⏳ Pending',
+        commentsCount: 0,
+        lastUpdated: pr.updated_at,
+        author: pr.author,
+        branch: `${pr.head_branch} → ${pr.base_branch}`,
+      }))
+      setTrackingData(rows)
+
       toast({
-        title: 'Data Refreshed',
-        description: 'Tracking data has been updated',
+        title: 'Data Loaded',
+        description: 'Tracking data loaded from backend',
         status: 'success',
-        duration: 2000,
+        duration: 1500,
         isClosable: true,
       })
-    }, 1000)
+    } catch (err: any) {
+      console.error('Failed to load tracking data:', err)
+      toast({
+        title: 'Failed to load data',
+        description: err?.message || 'Backend may not be running',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
+
+  const refreshData = () => {
+    loadData()
+  }
+
+  useEffect(() => {
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const exportToCSV = () => {
     toast({
@@ -131,7 +178,7 @@ export function Tracking() {
     })
   }
 
-  const filteredData = mockTrackingData.filter(item => {
+  const filteredData = trackingData.filter(item => {
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -177,7 +224,7 @@ export function Tracking() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Total PRs</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.totalPRs}</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.totalPRs}</StatNumber>
                   <StatHelpText>
                     <StatArrow type="increase" />
                     12.5%
@@ -195,7 +242,7 @@ export function Tracking() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Open PRs</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.openPRs}</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.openPRs}</StatNumber>
                   <StatHelpText>
                     <StatArrow type="decrease" />
                     8.2%
@@ -213,7 +260,7 @@ export function Tracking() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Approved PRs</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.approvedPRs}</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.approvedPRs}</StatNumber>
                   <StatHelpText>
                     <StatArrow type="increase" />
                     15.3%
@@ -231,7 +278,7 @@ export function Tracking() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Approval Rate</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.approvalRate}%</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.approvalRate}%</StatNumber>
                   <StatHelpText>
                     <StatArrow type="increase" />
                     5.1%

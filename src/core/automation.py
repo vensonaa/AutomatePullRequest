@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from src.services.github_service import GitHubService
 from src.services.groq_service import GroqService
 from src.services.sheets_service import GoogleSheetsService
+from src.services.database_service import DatabaseService
 from src.models.pr_models import PRResult, ReviewResult, TrackingResult, StatusInfo
 from src.utils.config import Config
 
@@ -31,7 +32,17 @@ class GitHubPRAutomation:
         self.github_service = GitHubService(config.github)
         self.groq_service = GroqService(config.groq)
         self.sheets_service = GoogleSheetsService(config.sheets)
+        self.database_service = DatabaseService()
         self.logger = logging.getLogger(__name__)
+    
+    async def initialize(self):
+        """Initialize all services including database"""
+        try:
+            await self.database_service.initialize()
+            self.logger.info("All services initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Error initializing services: {e}")
+            raise
     
     async def create_pr(
         self,
@@ -118,6 +129,25 @@ class GitHubPRAutomation:
                 files=files
             )
             
+            # Persist AI review to database
+            try:
+                metadata = {
+                    'ai_model': self.config.groq.model,
+                    'processing_time_ms': None,  # Could be added to GroqService
+                    'tokens_used': None,  # Could be added to GroqService
+                    'cost_estimate': None  # Could be added to GroqService
+                }
+                
+                await self.database_service.save_ai_review(
+                    pr_data=pr_data,
+                    review=review,
+                    files=files,
+                    metadata=metadata
+                )
+                self.logger.info(f"Persisted AI review for PR #{pr_number}")
+            except Exception as db_error:
+                self.logger.warning(f"Failed to persist AI review for PR #{pr_number}: {db_error}")
+            
             comments_added = 0
             if auto_comment and review.comments:
                 # Add AI comments to the PR
@@ -147,6 +177,47 @@ class GitHubPRAutomation:
         except Exception as e:
             self.logger.error(f"Error reviewing PR #{pr_number}: {e}")
             return ReviewResult(success=False, error=str(e))
+    
+    async def get_ai_review(self, pr_number: int) -> Optional[Dict[str, Any]]:
+        """Get a persisted AI review by PR number"""
+        try:
+            return await self.database_service.get_ai_review(pr_number)
+        except Exception as e:
+            self.logger.error(f"Error getting AI review for PR #{pr_number}: {e}")
+            return None
+    
+    async def get_all_ai_reviews(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        author: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get all persisted AI reviews with optional filtering"""
+        try:
+            return await self.database_service.get_all_ai_reviews(
+                limit=limit,
+                offset=offset,
+                author=author
+            )
+        except Exception as e:
+            self.logger.error(f"Error getting AI reviews: {e}")
+            return []
+    
+    async def get_review_statistics(self) -> Dict[str, Any]:
+        """Get statistics about persisted AI reviews"""
+        try:
+            return await self.database_service.get_review_statistics()
+        except Exception as e:
+            self.logger.error(f"Error getting review statistics: {e}")
+            return {}
+    
+    async def search_ai_reviews(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Search persisted AI reviews by content"""
+        try:
+            return await self.database_service.search_reviews(query, limit)
+        except Exception as e:
+            self.logger.error(f"Error searching AI reviews: {e}")
+            return []
     
     async def review_all_open_prs(self, auto_comment: bool = True) -> ReviewResult:
         """Review all open PRs with AI"""

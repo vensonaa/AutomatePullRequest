@@ -22,6 +22,10 @@ import {
   Flex,
   Button,
   IconButton,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
 } from '@chakra-ui/react'
 import {
   LineChart,
@@ -50,33 +54,112 @@ import {
   FiRefreshCw,
 } from 'react-icons/fi'
 import { useState, useEffect } from 'react'
+import apiService from '../services/apiService'
 
-// TODO: Replace with real API calls
-const mockStats = {
-  totalPRs: 0,
-  openPRs: 0,
-  approvedPRs: 0,
-  pendingReviews: 0,
-  avgReviewTime: '0h',
-  approvalRate: 0,
+// Real data state
+interface DashboardStats {
+  totalPRs: number
+  openPRs: number
+  approvedPRs: number
+  pendingReviews: number
+  avgReviewTime: string
+  approvalRate: number
 }
 
-const mockChartData: any[] = []
-
-const mockRecentPRs: any[] = []
-
-const mockPieData: any[] = []
+interface PRData {
+  id: number
+  number: number
+  title: string
+  status: string
+  author: string
+  createdAt: string
+  reviews: number
+  required: number
+}
 
 export function Dashboard() {
   const [isLoading, setIsLoading] = useState(false)
+  const [stats, setStats] = useState<DashboardStats>({
+    totalPRs: 0,
+    openPRs: 0,
+    approvedPRs: 0,
+    pendingReviews: 0,
+    avgReviewTime: '0h',
+    approvalRate: 0,
+  })
+  const [recentPRs, setRecentPRs] = useState<PRData[]>([])
+  const [chartData, setChartData] = useState<any[]>([])
+  const [pieData, setPieData] = useState<any[]>([])
+  const [error, setError] = useState<string | null>(null)
+  
   const cardBg = useColorModeValue('white', 'gray.700')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
 
-  const refreshData = () => {
-    setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => setIsLoading(false), 1000)
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      
+      // Fetch stats
+      const statsData = await apiService.getStats()
+      setStats({
+        totalPRs: statsData.totalPRs || 0,
+        openPRs: statsData.openPRs || 0,
+        approvedPRs: statsData.approvedPRs || 0,
+        pendingReviews: statsData.pendingReviews || 0,
+        avgReviewTime: statsData.avgReviewTime || '0h',
+        approvalRate: statsData.approvalRate || 0,
+      })
+      
+      // Fetch recent PRs
+      const prsResponse = await apiService.getPullRequests()
+      const prs = prsResponse.prs || []
+      
+      // Convert to dashboard format and take last 5
+      const dashboardPRs: PRData[] = prs.slice(0, 5).map((pr: any) => ({
+        id: pr.number,
+        number: pr.number,
+        title: pr.title,
+        status: pr.state,
+        author: pr.author,
+        createdAt: pr.created_at,
+        reviews: 0, // TODO: Get actual review count
+        required: 1, // TODO: Get actual required reviews
+      }))
+      setRecentPRs(dashboardPRs)
+      
+      // Generate chart data from stats
+      const chartDataFromStats = [
+        { name: 'Total', PRs: statsData.totalPRs || 0, Reviews: 0, Approvals: statsData.approvedPRs || 0 },
+        { name: 'Open', PRs: statsData.openPRs || 0, Reviews: 0, Approvals: 0 },
+        { name: 'Closed', PRs: (statsData.totalPRs || 0) - (statsData.openPRs || 0), Reviews: 0, Approvals: 0 },
+      ]
+      setChartData(chartDataFromStats)
+      
+      // Generate pie chart data
+      const pieDataFromStats = [
+        { name: 'Open', value: statsData.openPRs || 0, color: '#3182CE' },
+        { name: 'Approved', value: statsData.approvedPRs || 0, color: '#38A169' },
+        { name: 'Pending Review', value: statsData.pendingReviews || 0, color: '#D69E2E' },
+        { name: 'Closed', value: (statsData.totalPRs || 0) - (statsData.openPRs || 0), color: '#E53E3E' },
+      ].filter(item => item.value > 0)
+      setPieData(pieDataFromStats)
+      
+    } catch (err: any) {
+      console.error('Failed to load dashboard data:', err)
+      setError(err?.message || 'Failed to load dashboard data')
+    } finally {
+      setIsLoading(false)
+    }
   }
+
+  const refreshData = () => {
+    loadDashboardData()
+  }
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -115,6 +198,17 @@ export function Dashboard() {
         </Button>
       </Flex>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert status="error" mb={6}>
+          <AlertIcon />
+          <Box>
+            <AlertTitle>Error Loading Data</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Box>
+        </Alert>
+      )}
+
       {/* Stats Cards */}
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6} mb={8}>
         <Card bg={cardBg} border="1px" borderColor={borderColor}>
@@ -123,10 +217,10 @@ export function Dashboard() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Total PRs</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.totalPRs}</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.totalPRs}</StatNumber>
                   <StatHelpText>
                     <StatArrow type="increase" />
-                    12.5%
+                    {stats.totalPRs > 0 ? 'Active' : 'No PRs'}
                   </StatHelpText>
                 </Box>
                 <Icon as={FiGitBranch} w={8} h={8} color="brand.500" />
@@ -141,10 +235,10 @@ export function Dashboard() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Open PRs</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.openPRs}</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.openPRs}</StatNumber>
                   <StatHelpText>
                     <StatArrow type="decrease" />
-                    8.2%
+                    {stats.openPRs > 0 ? 'Needs Review' : 'All Closed'}
                   </StatHelpText>
                 </Box>
                 <Icon as={FiEye} w={8} h={8} color="purple.500" />
@@ -159,10 +253,10 @@ export function Dashboard() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Approved PRs</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.approvedPRs}</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.approvedPRs}</StatNumber>
                   <StatHelpText>
                     <StatArrow type="increase" />
-                    15.3%
+                    {stats.approvalRate.toFixed(1)}% rate
                   </StatHelpText>
                 </Box>
                 <Icon as={FiCheckCircle} w={8} h={8} color="green.500" />
@@ -177,10 +271,10 @@ export function Dashboard() {
               <HStack justify="space-between">
                 <Box>
                   <StatLabel color="gray.600">Pending Reviews</StatLabel>
-                  <StatNumber fontSize="2xl">{mockStats.pendingReviews}</StatNumber>
+                  <StatNumber fontSize="2xl">{stats.pendingReviews}</StatNumber>
                   <StatHelpText>
                     <StatArrow type="decrease" />
-                    5.1%
+                    {stats.pendingReviews > 0 ? 'Needs Attention' : 'All Reviewed'}
                   </StatHelpText>
                 </Box>
                 <Icon as={FiClock} w={8} h={8} color="orange.500" />
@@ -196,11 +290,11 @@ export function Dashboard() {
         <GridItem>
           <Card bg={cardBg} border="1px" borderColor={borderColor} mb={6}>
             <CardHeader>
-              <Heading size="md">PR Activity (Last 7 Days)</Heading>
+              <Heading size="md">PR Status Overview</Heading>
             </CardHeader>
             <CardBody>
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={mockChartData}>
+                <AreaChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />
@@ -239,25 +333,31 @@ export function Dashboard() {
               <Heading size="md">PR Status Distribution</Heading>
             </CardHeader>
             <CardBody>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={mockPieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {mockPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <Box textAlign="center" py={8}>
+                  <Text color="gray.500">No data available for chart</Text>
+                </Box>
+              )}
             </CardBody>
           </Card>
         </GridItem>
@@ -269,41 +369,47 @@ export function Dashboard() {
               <Heading size="md">Recent PRs</Heading>
             </CardHeader>
             <CardBody>
-              <VStack spacing={4} align="stretch">
-                {mockRecentPRs.map((pr) => (
-                  <Box
-                    key={pr.id}
-                    p={4}
-                    border="1px"
-                    borderColor={borderColor}
-                    borderRadius="md"
-                    _hover={{ bg: useColorModeValue('gray.50', 'gray.600') }}
-                  >
-                    <HStack justify="space-between" mb={2}>
-                      <Text fontWeight="semibold" fontSize="sm" noOfLines={1}>
-                        {pr.title}
+              {recentPRs.length > 0 ? (
+                <VStack spacing={4} align="stretch">
+                  {recentPRs.map((pr) => (
+                    <Box
+                      key={pr.id}
+                      p={4}
+                      border="1px"
+                      borderColor={borderColor}
+                      borderRadius="md"
+                      _hover={{ bg: useColorModeValue('gray.50', 'gray.600') }}
+                    >
+                      <HStack justify="space-between" mb={2}>
+                        <Text fontWeight="semibold" fontSize="sm" noOfLines={1}>
+                          {pr.title}
+                        </Text>
+                        <Badge colorScheme={getStatusColor(pr.status)}>
+                          {pr.status}
+                        </Badge>
+                      </HStack>
+                      <Text fontSize="xs" color="gray.600" mb={2}>
+                        by {pr.author} • {new Date(pr.createdAt).toLocaleDateString()}
                       </Text>
-                      <Badge colorScheme={getStatusColor(pr.status)}>
-                        {pr.status}
-                      </Badge>
-                    </HStack>
-                    <Text fontSize="xs" color="gray.600" mb={2}>
-                      by {pr.author} • {pr.createdAt}
-                    </Text>
-                    <HStack justify="space-between">
-                      <Text fontSize="xs" color="gray.600">
-                        Reviews: {pr.reviews}/{pr.required}
-                      </Text>
-                      <Progress
-                        value={(pr.reviews / pr.required) * 100}
-                        size="sm"
-                        width="60px"
-                        colorScheme={pr.reviews >= pr.required ? 'green' : 'blue'}
-                      />
-                    </HStack>
-                  </Box>
-                ))}
-              </VStack>
+                      <HStack justify="space-between">
+                        <Text fontSize="xs" color="gray.600">
+                          Reviews: {pr.reviews}/{pr.required}
+                        </Text>
+                        <Progress
+                          value={(pr.reviews / pr.required) * 100}
+                          size="sm"
+                          width="60px"
+                          colorScheme={pr.reviews >= pr.required ? 'green' : 'blue'}
+                        />
+                      </HStack>
+                    </Box>
+                  ))}
+                </VStack>
+              ) : (
+                <Box textAlign="center" py={8}>
+                  <Text color="gray.500">No PRs found</Text>
+                </Box>
+              )}
             </CardBody>
           </Card>
         </GridItem>

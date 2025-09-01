@@ -31,8 +31,12 @@ import {
   FiEye,
   FiBarChart,
   FiZap,
+  FiDatabase,
+  FiLogOut,
+  FiUser,
 } from 'react-icons/fi'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
 interface LinkItemProps {
   name: string
@@ -44,13 +48,20 @@ const LinkItems: Array<LinkItemProps> = [
   { name: 'Dashboard', icon: FiHome, path: '/' },
   { name: 'Create PR', icon: FiGitBranch, path: '/create-pr' },
   { name: 'Review PR', icon: FiEye, path: '/review-pr' },
+  { name: 'AI Reviews', icon: FiDatabase, path: '/ai-reviews' },
   { name: 'Tracking', icon: FiBarChart, path: '/tracking' },
-  { name: 'Automation', icon: FiZap, path: '/automation' },
   { name: 'Settings', icon: FiSettings, path: '/settings' },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { isOpen, onOpen, onClose } = useDisclosure()
+  const { user, isAuthenticated, logout } = useAuth()
+  
+  // If not authenticated, don't render the layout
+  if (!isAuthenticated) {
+    return <>{children}</>
+  }
+  
   return (
     <Box minH="100vh" bg={useColorModeValue('gray.100', 'gray.900')}>
       <SidebarContent
@@ -70,7 +81,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </DrawerContent>
       </Drawer>
       {/* mobilenav */}
-      <MobileNav onOpen={onOpen} />
+      <MobileNav onOpen={onOpen} user={user} logout={logout} />
       <Box ml={{ base: 0, md: 60 }} p="4">
         {children}
       </Box>
@@ -96,7 +107,7 @@ const SidebarContent = ({ onClose, ...rest }: SidebarProps) => {
       h="full"
       {...rest}>
       <Flex h="20" alignItems="center" mx="8" justifyContent="space-between">
-        <Text fontSize="2xl" fontFamily="monospace" fontWeight="bold" bgGradient="linear(to-r, brand.400, purple.400)" bgClip="text">
+        <Text fontSize="2xl" fontFamily="monospace" fontWeight="bold">
           🤖 PR Bot
         </Text>
         <CloseButton display={{ base: 'flex', md: 'none' }} onClick={onClose} />
@@ -110,16 +121,9 @@ const SidebarContent = ({ onClose, ...rest }: SidebarProps) => {
   )
 }
 
-interface NavItemProps {
-  icon: any
-  children: React.ReactNode
-  path: string
-  isActive: boolean
-}
-
-const NavItem = ({ icon, children, path, isActive, ...rest }: NavItemProps) => {
+const NavItem = ({ icon, children, path, isActive, ...rest }: any) => {
   return (
-    <Link to={path} style={{ textDecoration: 'none' }}>
+    <Link to={path}>
       <Flex
         align="center"
         p="4"
@@ -127,12 +131,12 @@ const NavItem = ({ icon, children, path, isActive, ...rest }: NavItemProps) => {
         borderRadius="lg"
         role="group"
         cursor="pointer"
-        bg={isActive ? 'brand.400' : 'transparent'}
-        color={isActive ? 'white' : 'gray.600'}
         _hover={{
-          bg: isActive ? 'brand.500' : 'brand.50',
-          color: isActive ? 'white' : 'brand.600',
+          bg: 'brand.400',
+          color: 'white',
         }}
+        bg={isActive ? 'brand.400' : 'transparent'}
+        color={isActive ? 'white' : 'brand.600'}
         {...rest}>
         {icon && (
           <Icon
@@ -149,9 +153,11 @@ const NavItem = ({ icon, children, path, isActive, ...rest }: NavItemProps) => {
 
 interface MobileProps {
   onOpen: () => void
+  user: any
+  logout: () => void
 }
 
-const MobileNav = ({ onOpen, ...rest }: MobileProps) => {
+const MobileNav = ({ onOpen, user, logout, ...rest }: MobileProps) => {
   return (
     <Flex
       ml={{ base: 0, md: 60 }}
@@ -197,17 +203,17 @@ const MobileNav = ({ onOpen, ...rest }: MobileProps) => {
               <HStack>
                 <Avatar
                   size={'sm'}
-                  name="User"
-                  src="https://images.unsplash.com/photo-1619946794135-5bc917a27793?ixlib=rb-0.3.5&q=80&fm=jpg&crop=faces&fit=crop&h=200&w=200&s=b616b2c5b373a80ffc9636ba24f7a4a"
+                  name={user?.name || 'User'}
+                  src={user?.avatar}
                 />
                 <VStack
                   display={{ base: 'none', md: 'flex' }}
                   alignItems="flex-start"
                   spacing="1px"
                   ml="2">
-                  <Text fontSize="sm">John Doe</Text>
+                  <Text fontSize="sm">{user?.name || 'User'}</Text>
                   <Text fontSize="xs" color="gray.600">
-                    Admin
+                    {user?.role || 'User'}
                   </Text>
                 </VStack>
                 <Box display={{ base: 'none', md: 'flex' }}>
@@ -218,11 +224,12 @@ const MobileNav = ({ onOpen, ...rest }: MobileProps) => {
             <MenuList
               bg={useColorModeValue('white', 'gray.900')}
               borderColor={useColorModeValue('gray.200', 'gray.700')}>
-              <MenuItem>Profile</MenuItem>
-              <MenuItem>Settings</MenuItem>
-              <MenuItem>Billing</MenuItem>
+              <MenuItem icon={<FiUser />}>Profile</MenuItem>
+              <MenuItem icon={<FiSettings />}>Settings</MenuItem>
               <MenuDivider />
-              <MenuItem>Sign out</MenuItem>
+              <MenuItem icon={<FiLogOut />} onClick={logout}>
+                Sign out
+              </MenuItem>
             </MenuList>
           </Menu>
         </Flex>

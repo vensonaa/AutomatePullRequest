@@ -43,6 +43,7 @@ import {
   FiCheckCircle,
 } from 'react-icons/fi'
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import apiService from '../services/apiService'
 import { config } from '../utils/config'
 
@@ -58,6 +59,7 @@ interface PRFormData {
 }
 
 export function PRCreation() {
+  const navigate = useNavigate()
   // Real data from GitHub API
   const [branches, setBranches] = useState<any[]>([])
   const [labels, setLabels] = useState<any[]>([])
@@ -258,6 +260,11 @@ export function PRCreation() {
           duration: 8000,
           isClosable: true,
         })
+        
+        // Redirect to Review PR page after a short delay
+        setTimeout(() => {
+          navigate('/review-pr')
+        }, 2000)
       } else {
         toast({
           title: 'PR Created Successfully',
@@ -266,6 +273,11 @@ export function PRCreation() {
           duration: 5000,
           isClosable: true,
         })
+        
+        // Redirect to Review PR page after a short delay
+        setTimeout(() => {
+          navigate('/review-pr')
+        }, 2000)
       }
       
       // Reset form

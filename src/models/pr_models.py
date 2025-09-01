@@ -98,6 +98,23 @@ class AIReview:
     issues: List[str]
 
 @dataclass
+class PersistedAIReview:
+    """Persisted AI review with metadata"""
+    id: int
+    pr_number: int
+    pr_title: str
+    pr_author: str
+    summary: str
+    score: float
+    suggestions: List[str]
+    issues: List[str]
+    comments: List[PRComment]
+    files: List[PRFile]
+    created_at: datetime
+    updated_at: datetime
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
 class AIContent:
     """AI-generated PR content"""
     title: str

@@ -134,6 +134,14 @@ npm run dev
 - **Intelligent Reviews**: Automated code review with suggestions
 - **Context-Aware**: Analyzes code changes and commit history
 - **Custom Prompts**: Advanced AI customization options
+- **Review Persistence**: Store and retrieve AI reviews for historical analysis
+
+### 💾 AI Review Persistence
+- **SQLite Database**: Lightweight, local storage for AI reviews
+- **Complete Metadata**: Store review scores, comments, files, and AI model info
+- **Search & Filter**: Find reviews by content, author, or date
+- **Analytics Dashboard**: Review statistics and trends
+- **Historical Analysis**: Track review quality over time
 
 ### 📊 Real-time Monitoring
 - **Live Dashboard**: Real-time PR statistics and metrics
@@ -196,6 +204,7 @@ AutomatePullRequest/
 - **AI Review**: Automated code review
 - **Review Interface**: Approve, request changes, comment
 - **File Analysis**: Detailed change analysis
+- **Review History**: View persisted AI reviews with search and filtering
 
 ### 📈 Tracking
 - **Google Sheets Integration**: Real-time sync
@@ -222,12 +231,14 @@ AutomatePullRequest/
 - **Code Review**: Intelligent suggestions and comments
 - **Pattern Analysis**: Code change analysis
 - **Reviewer Suggestions**: AI-recommended reviewers
+- **Review Persistence**: Store and retrieve AI reviews in SQLite database
 
 ### 📊 Data Management
 - **Google Sheets Sync**: Automated data tracking
 - **Statistics**: PR metrics and analytics
 - **Export**: CSV and data export
 - **Backup**: Data backup and recovery
+- **AI Review Database**: SQLite persistence for AI reviews with search and analytics
 
 ## 🛡️ Security & Best Practices
 
